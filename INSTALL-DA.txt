@@ -1,0 +1,23 @@
+RefMatch 0.4.3 — testbuild, kun plugin
+
+1. Upload RefMatch-mappen og den nye .github/workflows/main.yml til GitHub.
+2. Vent på grønt build. Hent RefMatch-0.4.3-PluginOnly-macOS under Artifacts.
+3. Luk Logic helt. Erstat den installerede RefMatch.component med den nye.
+4. Åbn Logic. Kontrollér at RefMatch viser 0.4.3.
+5. Åbn Spotify, vælg en reference og sæt den på pause.
+6. Klik CONNECT SPOTIFY i pluginet. En fejl med et tal betyder, at transport eller
+   statuskontrol afvises. Send den præcise fejl videre; gen-signér ikke Logic.
+7. ENABLE SYSTEM AUDIO og godkend optagelse for den vært, macOS viser.
+8. Start Logic-afspilning. SWITCH TO REF skal mute MIX og starte Spotify.
+9. SWITCH TO MIX skal pause Spotify og gendanne MIX.
+
+Ved fejl gendannes MIX. Hvis PAUSE også afvises, må Spotify pauses manuelt.
+Koden bruger direkte Apple Events uden AppleScript og uden metadataadgang.
+Det giver ikke pluginet ret til at omgå værtens macOS-begrænsninger.
+Spotify-rettighedsfejlen er derfor ikke bekræftet løst før denne Logic-test.
+
+Kildens 0.4.3-ændringer er endnu ikke kompileret lokalt. GitHub skal bygge først.
+Ingen Control-app, Standalone, Dock-app eller helper medfølger.
+ScreenCaptureKit leverer fortsat REF-analyse, meters og spectrum.
+Brug ét RefMatch-plugin til at styre Spotify. Pause Spotify før pluginet fjernes.
+Buildet er ad-hoc-signeret, ikke Developer ID-notariseret.
