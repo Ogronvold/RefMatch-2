@@ -1,0 +1,41 @@
+RefMatch 0.4.1 - runtime-rettelser
+
+GITHUB
+1. Erstat RefMatch-0.4-StreamMode-SOURCE med mappen fra denne ZIP.
+2. Erstat OGSAA .github/workflows/main.yml i roden af repoet med filen
+   fra denne ZIP. Den gamle signering maa ikke bruges til kontrolappen.
+3. Commit og vent paa Actions. Hent artifact RefMatch-0.4.1-StreamMode-macOS.
+   Det indeholder RefMatch-0.4.1-macOS.zip med de byggede plugins.
+4. Denne kilde-ZIP indeholder ikke faerdigbyggede plugins.
+
+INSTALLATION EFTER ET GROENT BUILD
+1. Luk Logic. Hvis RM ses i menulinjen: vaelg Quit RefMatch Control.
+2. Erstat RefMatch.component med HELE den nye .component.
+   Kontrolappen ligger indeni og skal blive der.
+3. Aabn Spotify desktop og vaelg et track. Aabn Logic og RefMatch.
+4. Klik CONNECT SPOTIFY. Tillad at "RefMatch Control" styrer Spotify.
+   Det er denne app, som skal have Automation-tilladelse, ikke pluginets plist.
+5. Ved afslag: klik PERMISSIONS og aktiver Spotify under RefMatch Control
+   i Systemindstillinger > Anonymitet og sikkerhed > Automatisering.
+   Klik derefter CONNECT SPOTIFY igen.
+6. Screen/System Audio-tilladelsen til Logic/capture er separat og bevares.
+7. Proev PLAY/PAUSE og derefter SWITCH TO REF / SWITCH TO MIX.
+
+HVAD DER ER AENDRET
+- Spotify-kommandoer koerer i en separat medfoelgende Cocoa-app.
+- Tilladelse efterspoerges kun ved CONNECT. Ingen gentagne timer-prompter.
+- Permission-afslag og timeouts vises i UI. Fejl efter SWITCH gendanner MIX.
+- 20 ms fade af DAW-signalet; Spotify spiller fortsat eksternt.
+  Det er ikke en samplepraecis crossfade af Spotify-lyden.
+- Unicode i track/artist bevares; metadata bruger ikke tekstseparatorer.
+- Laesbare statustekster, PERMISSIONS-knap, tooltips og mere plads i UI.
+- Capture-callbacks holder ikke laengere en raapointer til slettet tilstand.
+
+STATUS
+Denne Mac mangler CMake og Xcode/Command Line Tools.
+Der er derfor endnu ikke gennemfoert et lokalt compile- eller Logic-runtime-test.
+Workflowet bygger AU, VST3, Standalone og kontrolappen, koerer skift/fade-tests
+og verificerer signering/Automation-entitlement.
+Ad-hoc signering er til test; pakken er ikke notariseret. En ny ad-hoc build
+kan kraeve fornyet Automation-tilladelse. Produktionsudgivelse boer signeres
+med en stabil Developer ID-identitet og notariseres.
