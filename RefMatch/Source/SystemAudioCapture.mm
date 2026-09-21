@@ -219,7 +219,7 @@ void SystemAudioCapture::start()
                 p->setError("Capture permission/start timed out. Allow your host in macOS settings and retry.");
             }
         });
-        [SCShareableContent getExcludingDesktopWindows:NO onScreenWindowsOnly:NO completionHandler:^(SCShareableContent* content, NSError* err)
+        [SCShareableContent getShareableContentExcludingDesktopWindows:NO onScreenWindowsOnly:NO completionHandler:^(SCShareableContent* content, NSError* err)
         {
             dispatch_async(dispatch_get_main_queue(), ^{
             if (p->generation.load() != generation) return;
