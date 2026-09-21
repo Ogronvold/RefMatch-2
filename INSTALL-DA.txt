@@ -1,0 +1,24 @@
+RefMatch 0.4.4 — testbuild med systemmediestyring
+
+1. Byg på GitHub med den nye RefMatch-mappe og .github/workflows/main.yml.
+2. Hent RefMatch-0.4.4-PluginOnly-macOS efter grønt build.
+3. Luk Logic helt. Erstat RefMatch.component, og åbn Logic igen.
+4. Kontrollér at pluginet viser 0.4.4.
+5. Afspil din reference én gang i Spotify, Apple Music eller browser, og pause den.
+   Det fortæller macOS, hvilken medieafspiller der skal styres.
+6. Klik SWITCH TO REF. Mixet skal mute, og medieafspilleren skal starte.
+7. Klik SWITCH TO MIX. Medieafspilleren skal pause, og mixet skal komme tilbage.
+8. Gentag med Logic stoppet. SWITCH må ikke kræve Logic-afspilning.
+9. ENABLE METERS er valgfrit. Giv Screen Recording-tilladelse for REF-analyse.
+   A/B skal fungere, selv hvis måling er slukket eller tilladelsen afvises.
+
+Der er ingen CONNECT SPOTIFY og ingen Spotify Automation i transporten.
+Spotify-søgefeltet åbner stadig søgningen i Spotify efter dit klik.
+Ingen Control-app, helper, Standalone-app eller Dock-app medfølger.
+
+Vigtigt: Systemmediestyringen bruger en privat macOS-API. En accepteret kommando
+beviser ikke, at afspilleren reagerede. Denne 0.4.4 er endnu ikke testet i Logic.
+Hvis macOS afviser kommandoen, gendannes MIX. Hvis PAUSE også fejler, pause kilden
+manuelt. Kildens normale lyd går stadig uden om pluginet.
+
+Buildet er ad-hoc-signeret og ikke Developer ID-notariseret.
