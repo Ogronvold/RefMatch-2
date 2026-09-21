@@ -27,7 +27,7 @@ jobs:
             test -d "$bundle"
             test -z "$(find "$bundle" -type d -name '*.app' -print)"
             codesign --verify --deep --strict "$bundle"
-            lipo -verify_arch arm64 x86_64 "$bundle/Contents/MacOS/RefMatch"
+            lipo "$bundle/Contents/MacOS/RefMatch" -verify_arch arm64 x86_64
             ditto "$bundle" "RefMatch-Build/$(basename "$bundle")"
           done
           cp INSTALL-DA.txt RefMatch-Build/
