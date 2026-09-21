@@ -21,7 +21,7 @@ jobs:
 
       - name: Konfigurer RefMatch
         run: |
-          cmake -S . -B build \
+          cmake -S RefMatch-0.4-StreamMode-SOURCE/RefMatch -B build \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
 
