@@ -188,7 +188,7 @@ void SystemAudioCapture::start()
     {
         auto p = impl;
         const auto generation = ++p->generation;
-        [SCShareableContent getExcludingDesktopWindows:NO onScreenWindowsOnly:NO completionHandler:^(SCShareableContent* content, NSError* err)
+       [SCShareableContent getShareableContentExcludingDesktopWindows:NO onScreenWindowsOnly:NO completionHandler:^(SCShareableContent* content, NSError* err)
         {
             dispatch_async(dispatch_get_main_queue(), ^{
             if (p->generation.load() != generation) return;
