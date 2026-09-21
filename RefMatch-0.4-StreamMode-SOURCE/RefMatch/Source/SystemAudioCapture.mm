@@ -179,7 +179,7 @@ void SystemAudioCapture::start()
     if (@available(macOS 13.0, *))
     {
         auto* p = impl.get();
-        [SCShareableContent getExcludingDesktopWindows:NO onScreenWindowsOnly:NO completionHandler:^(SCShareableContent* content, NSError* err)
+        [SCShareableContent getShareableContentExcludingDesktopWindows:NO onScreenWindowsOnly:NO completionHandler:^(SCShareableContent* content, NSError* err)
         {
             if (err != nil || content == nil || content.displays.count == 0)
             {
