@@ -1,0 +1,52 @@
+RefMatch 0.4 Stream Mode — build notes
+
+This revision follows the same core A/B model documented by Stream AB:
+- the DAW mix is muted/unmuted by the plugin;
+- the reference remains external system audio;
+- captured system audio is used only for analysis;
+- no Spotify OAuth/login is used.
+
+RefMatch-specific implementation in this source:
+- Spotify desktop is controlled locally with macOS Apple Events / Automation.
+- ScreenCaptureKit captures system audio while excluding the current DAW process.
+- Spotify search currently opens the query in the Spotify desktop app. It does not yet provide Stream AB-style in-plugin search results.
+- This corrected source package has not been compile-verified. The local Mac has
+  neither CMake nor Xcode/Command Line Tools. Configuration was attempted and
+  stopped with "command not found: cmake"; Apple's tool launcher also reports
+  that no developer tools are installed. GitHub Actions is the next build check.
+
+Expected GitHub artifact name:
+RefMatch-0.4-StreamMode-macOS
+
+Compile fixes, 2026-09-21:
+- SystemAudioCapture.mm and SpotifyDesktopController.mm import Apple frameworks
+  before project/JUCE headers. This prevents JUCE's generated namespace import
+  from making Apple's Point and Component declarations ambiguous.
+- PluginEditor.cpp uses std::initializer_list<juce::Component*> explicitly, so
+  labels, buttons, sliders and the text editor convert to the common base type.
+- CMake explicitly requests C++20 for Objective-C++, as well as C++.
+- SystemAudioCapture.mm explicitly includes array and cmath.
+
+Validation:
+- Checked the changes against the supplied GitHub Actions error log.
+- Reviewed all project source files and CMake source entries.
+- Checked that every original package file is retained except .DS_Store.
+- ZIP integrity checked. No plugin binaries are included.
+- AU/VST3/Standalone compilation, host loading, audio capture, Spotify control
+  and UI rendering remain untested in this environment.
+
+Upload to the existing GitHub repository:
+1. Unzip and replace the existing RefMatch-0.4-StreamMode-SOURCE folder.
+2. Keep the repository's existing root .github/workflows/main.yml, which uses:
+   cmake -S RefMatch-0.4-StreamMode-SOURCE/RefMatch -B build
+   with -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0.
+3. Commit the replacement files and inspect the new GitHub Actions build.
+
+The workflow bundled INSIDE this source folder uses -S RefMatch and is intended
+for a new repository where this folder's CONTENTS are uploaded to the root.
+Do not replace the working root workflow with that version in the nested layout.
+
+Source provenance:
+Copied from Desktop/VST/RefMatch-0.4-StreamMode-SOURCE on this Mac.
+The previous conversation's Pasted markdown.md attachment was available and read.
+/mnt/data and its original ZIP were not present in this desktop environment.
