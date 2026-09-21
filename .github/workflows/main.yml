@@ -1,0 +1,40 @@
+name: Build RefMatch plugin only
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AU and VST3
+        run: cmake -S RefMatch -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' -DBUILD_TESTING=ON
+      - name: Build plugins and tests
+        run: cmake --build build --config Release --parallel 3
+      - name: Test fades and capture failure recovery
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Verify and package plugins only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p RefMatch-Build
+          for entry in 'AU/RefMatch.component' 'VST3/RefMatch.vst3'; do
+            bundle="build/RefMatch_artefacts/Release/$entry"
+            test -d "$bundle"
+            test -z "$(find "$bundle" -type d -name '*.app' -print)"
+            codesign --verify --deep --strict "$bundle"
+            lipo -verify_arch arm64 x86_64 "$bundle/Contents/MacOS/RefMatch"
+            ditto "$bundle" "RefMatch-Build/$(basename "$bundle")"
+          done
+          cp INSTALL-DA.txt RefMatch-Build/
+          test -z "$(find RefMatch-Build -type d -name '*.app' -print)"
+          ditto -c -k --keepParent RefMatch-Build RefMatch-0.4.2-PluginOnly-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RefMatch-0.4.2-PluginOnly-macOS
+          path: RefMatch-0.4.2-PluginOnly-macOS.zip
+          if-no-files-found: error
