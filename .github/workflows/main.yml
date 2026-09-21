@@ -1,0 +1,62 @@
+name: Build RefMatch for macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Hent RefMatch-koden
+        uses: actions/checkout@v4
+
+      - name: Vis build-miljø
+        run: |
+          cmake --version
+          xcodebuild -version
+
+      - name: Konfigurer RefMatch
+        run: |
+          cmake -S RefMatch -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+
+      - name: Byg RefMatch
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Sign RefMatch
+        run: |
+          find build -name "*.component" -exec codesign --force --deep --sign - {} \;
+          find build -name "*.vst3" -exec codesign --force --deep --sign - {} \;
+          find build -name "*.app" -exec codesign --force --deep --sign - {} \;
+
+      - name: Find byggede plugins
+        run: |
+          echo "VST3:"
+          find build -name "*.vst3" -print
+
+          echo "AU:"
+          find build -name "*.component" -print
+
+          echo "Standalone:"
+          find build -name "*.app" -print
+
+      - name: Pak RefMatch plugins
+        run: |
+          mkdir -p RefMatch-Build
+
+          find build -name "*.vst3" -exec cp -R {} RefMatch-Build/ \;
+          find build -name "*.component" -exec cp -R {} RefMatch-Build/ \;
+          find build -name "*.app" -exec cp -R {} RefMatch-Build/ \;
+
+      - name: Upload færdigt plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: RefMatch-macOS
+          path: RefMatch-Build/
+          if-no-files-found: error
