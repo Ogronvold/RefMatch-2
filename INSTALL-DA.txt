@@ -1,0 +1,39 @@
+RefMatch 0.4.2 — kun plugin, macOS 13+
+
+Kildepakken er ikke en installeret eller lokalt verificeret AU.
+GitHub Actions bygger RefMatch.component og RefMatch.vst3 som universal binaries.
+Ingen Standalone-app, Control-app, indlejret helper eller baggrundsservice medfølger.
+
+1. Luk Logic. Erstat den tidligere RefMatch.component i
+   ~/Library/Audio/Plug-Ins/Components/ med den nybyggede component.
+   Fjern tidligere installerede RefMatch-apps manuelt, hvis du ikke ønsker dem;
+   den nye version åbner eller bruger dem aldrig.
+2. Åbn Logic og indsæt pluginet på den masterbus, du vil mute.
+3. Klik ENABLE SYSTEM AUDIO. Giv den vært, macOS viser, adgang til
+   Screen & System Audio Recording. Genstart værten hvis macOS kræver det.
+4. Vælg og afspil reference i Spotify, Apple Music eller browser.
+   Brug samme fysiske output som Logic, og se at REF-meteret reagerer.
+5. SWITCH TO REF fader DAW-mix til stilhed på 20 ms.
+6. Pause referenceafspilleren, og klik SWITCH TO MIX for at fade mix tilbage.
+
+VIGTIGT: Generisk SWITCH styrer DAW-mute, ikke andre programmers transport.
+Reference høres direkte fra kildeprogrammet, også i MIX hvis den stadig spiller.
+ScreenCaptureKit optager kun til analyse; den kan ikke mute referencekildens
+normale output. Der loves derfor ikke automatisk, eksklusiv A/B-play/pause
+for vilkårlige browsere eller medieapps i denne helperfri version.
+
+Spotify-knapper er valgfrie og kører direkte i værtsprocessen. CONNECT kan kun
+bede om tilladelse, når værten selv har en Apple Events-usage description.
+Eksisterende tilladelse prøves uden en ny dialog. Et AU-bundle kan ikke give
+Logic/AUHostingService rettigheder gennem sine egne entitlements.
+Hvis Automation afvises, brug afspillerens egne knapper. SWITCH og capture
+kræver ikke CONNECT. PERMISSIONS åbner Automation-indstillinger.
+
+Capture-stop giver automatisk MIX-fade. Manglende lydpakker i over ét sekund
+giver også MIX-fade; almindelig stilhed med gyldige pakker er ikke en fejl.
+Efter fejl skal REF vælges igen. Systemcapture og fallback fungerer uden åbent
+pluginvindue, mens Logic fortsat kalder pluginets lydbehandling.
+Hvis Logic suspenderer behandling, står målere stille indtil den genoptages.
+
+Buildet er ad-hoc signeret, ikke Developer ID-notariseret. Offentlig distribution
+kræver eget Developer ID-signering/notarisering. Redigér ikke Logics signatur.
