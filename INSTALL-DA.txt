@@ -1,21 +1,24 @@
-RefMatch 0.5.4
+RefMatch 0.5.5
 
 1. Upload RefMatch-mappen oven i den eksisterende mappe på GitHub.
 2. Erstat .github/workflows/main.yml med denne versions workflow.
-3. Vent på grønt build. Hent RefMatch-0.5.4-PluginOnly-macOS under Artifacts.
+3. Vent på grønt build. Hent RefMatch-0.5.5-PluginOnly-macOS under Artifacts.
 4. Luk Logic. Erstat RefMatch.component i /Library/Audio/Plug-Ins/Components/.
 5. Kør disse linjer i Terminal for denne lokale testversion:
 
 sudo xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/Components/RefMatch.component"
 sudo codesign --force --sign - "/Library/Audio/Plug-Ins/Components/RefMatch.component"
 
-6. Åbn Logic, og kontrollér versionsnummer 0.5.4. Pluginet skal være aktiveret.
+6. Åbn Logic, og kontrollér versionsnummer 0.5.5. Pluginet skal være aktiveret.
 
 LOOP
 Åbn LOOP. Træk et område på tidslinjen for at aktivere loop. Træk i enderne for
 at ændre området. Træk i den hvide markør og slip for at flytte afspilningen.
 In/Out kan også indtastes. Vælg B for at høre loopet. -5 s / +5 s flytter afspilningen.
-Flytter du uden for et aktivt loop, slås loop fra. Ved trackskift skal du vælge igen.
+Når LOOP er tændt, holdes spoling og +/-5 sekunder inden for området.
+Kun du slår LOOP fra. RECORD REF, pause, A/B og midlertidige fejl slår det ikke fra.
+LOOP ACTIVE blinker under aktivt loop; LOOP WAITING vises, mens afspilleren afventes.
+Ved en kortere ny sang skal In/Out tilpasses; loop-valget bevares.
 Tidslinje og skip kræver gyldige positionsdata fra afspilleren. TIMED er fjernet.
 
 MATCH EQ

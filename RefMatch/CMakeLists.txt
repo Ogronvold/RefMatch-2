@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0 CACHE STRING "Minimum macOS version")
 endif()
-project(RefMatch VERSION 0.5.4 LANGUAGES C CXX OBJCXX)
+project(RefMatch VERSION 0.5.5 LANGUAGES C CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -93,11 +93,14 @@ if(APPLE)
 endif()
 
 # No executable or helper bundle. Host entitlements cannot be granted by an AU.
+option(REFMATCH_ADHOC_SIGN "Ad-hoc sign local test builds" ON)
+if(REFMATCH_ADHOC_SIGN)
 foreach(format AU VST3)
     add_custom_command(TARGET RefMatch_${format} POST_BUILD
         COMMAND /usr/bin/codesign --force --sign - "$<TARGET_BUNDLE_DIR:RefMatch_${format}>"
         VERBATIM)
 endforeach()
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

@@ -1,9 +1,28 @@
-# RefMatch 0.5.4 — independent reference analysis / Tone EQ
+# RefMatch 0.5.5 — independent reference analysis / Tone EQ
 
 AU/VST3 plugin only; no helper or standalone app. Uses the working system-media
 transport and 20 ms mix fade, with orange MIX and purple REFERENCE accents.
 
-## 0.5.4 changes
+## 0.5.5 changes
+
+Loop remains enabled within the plugin instance until you turn it off. RECORD REF,
+metadata outages, failed seek, A/B, pause and source changes do not clear the toggle.
+It waits and retries. Invalid edits preserve the last valid range. On a shorter new
+track it waits for compatible In/Out values. Scrub and +/-5 seconds stay inside the
+active region; disable Loop to seek elsewhere.
+
+The header pulses LOOP ACTIVE for confirmed running loop state and shows steady
+LOOP WAITING while paused or awaiting position/seek. Loop remains selected while the
+editor is closed; a new plugin instance starts with Loop off.
+
+Capture AudioBufferList storage is reused per serial callback delegate, growing only
+when needed. Internal CoreMedia allocations are not eliminated by this change.
+
+A separate manual release workflow prepares Developer ID signing, an installer PKG,
+AU validation and Apple notarization. See RELEASE-SETUP.md. It has not been run and
+requires your Apple credentials. Normal test builds and local signing remain available.
+
+## Retained from 0.5.4
 
 TONE ON independently bypasses the three manual bands, retaining their gains and
 frequencies. Switching uses the existing approximately 20 ms coefficient transition.

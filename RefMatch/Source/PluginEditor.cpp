@@ -219,7 +219,7 @@ void RefMatchAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(black);
     g.setGradientFill(juce::ColourGradient(juce::Colour(0xff172238),0,0,black,640,250,false));g.fillRect(getLocalBounds());g.setColour(text);g.setFont(juce::Font(juce::FontOptions(23,juce::Font::bold)));g.drawText("RefMatch",20,12,170,30,juce::Justification::left);
-    g.setFont(juce::Font(juce::FontOptions(10)));g.setColour(muted);g.drawText("0.5.4   /   STREAM",455,18,164,20,juce::Justification::right);
+    g.setFont(juce::Font(juce::FontOptions(10)));g.setColour(muted);g.drawText("0.5.5   /   STREAM",455,18,164,20,juce::Justification::right);
     for(int side=0;side<2;++side) {
         const juce::Rectangle<float> r(side?370.f:20.f,60,250,114);
         g.setGradientFill(juce::ColourGradient(panel.brighter(.12f),r.getTopLeft(),panel.darker(.12f),r.getBottomRight(),false));g.fillRoundedRectangle(r,12);
@@ -283,6 +283,12 @@ void RefMatchAudioProcessorEditor::paint(juce::Graphics& g)
             const int x=20+i*204;g.setColour(panel);g.fillRoundedRectangle(float(x),542,192,76,7);
             g.setColour(violet);g.drawText(i==0?"LOW":i==1?"MID":"HIGH",x+8,542,160,16,juce::Justification::left);
         }}
+    if(processor.getLoop().isEnabled()) {
+        const bool active=processor.getLoop().isActive();
+        const float pulse=active ? .35f+.65f*float(.5+.5*std::sin(juce::Time::getMillisecondCounterHiRes()*.008)) : 1.f;
+        g.setColour((active?violet:cyan).withAlpha(pulse));g.fillEllipse(300,25,6,6);
+        g.setFont(juce::Font(juce::FontOptions(10)));g.drawText(active?"LOOP ACTIVE":"LOOP WAITING",312,18,124,20,juce::Justification::left);
+    }
     if(page==2){g.setColour(muted);g.drawText("IN",20,316,30,20,juce::Justification::left);g.drawText("OUT",238,316,34,20,juce::Justification::left);g.drawText("Drag the white playhead to seek. Drag a region to loop.",20,370,600,20,juce::Justification::left);}
 }
 void RefMatchAudioProcessorEditor::resized()

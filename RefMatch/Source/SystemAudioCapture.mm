@@ -141,6 +141,7 @@ struct SystemAudioCapture::Impl
 @public
     std::weak_ptr<SystemAudioCapture::Impl> owner;
     unsigned captureGeneration;
+    std::vector<uint8_t> audioListStorage;
 }
 @end
 
@@ -169,8 +170,8 @@ struct SystemAudioCapture::Impl
     if (s != noErr || needed == 0) { if (block) CFRelease(block); return; }
 
     if (block) { CFRelease(block); block = nullptr; }
-    std::vector<uint8_t> storage(needed);
-    auto* abl = reinterpret_cast<AudioBufferList*>(storage.data());
+    if(audioListStorage.size()<needed)audioListStorage.resize(needed);
+    auto* abl = reinterpret_cast<AudioBufferList*>(audioListStorage.data());
     s = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer,
                                                                  &needed,
                                                                  abl,

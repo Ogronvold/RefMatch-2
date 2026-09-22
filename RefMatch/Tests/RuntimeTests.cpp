@@ -2,6 +2,7 @@
 #include "TransportSwitch.h"
 #include "EQDesign.h"
 #include "LoopTiming.h"
+#include "PersistentLoop.h"
 #include "PlaybackFeedback.h"
 #include "LoopSelection.h"
 #include <cstdlib>
@@ -15,6 +16,22 @@ void check(bool condition, const char* message)
 
 int main()
 {
+    PersistentLoop loop;
+    check(loop.setRange(47,51),"set loop region");loop.enable(true);
+    check(loop.update(true,true,true,48,200,0),"initial loop seek");loop.seekResult(true,0);
+    check(!loop.update(true,true,true,47.3,200,300) && loop.getState()==PersistentLoop::State::active,"loop is active after confirmation");
+    loop.update(false,true,true,0,0,10000);
+    check(loop.isEnabled() && loop.getState()==PersistentLoop::State::waiting,"long metadata outage keeps loop enabled");
+    check(loop.update(true,true,true,52,200,11000),"recovered metadata resumes looping");loop.seekResult(false,11000);
+    check(loop.isEnabled() && !loop.update(true,true,true,52,200,11500),"failed seek waits without clearing loop");
+    check(loop.update(true,true,true,52,200,12000),"failed seek retries after backoff");loop.seekResult(true,12000);
+    loop.update(true,true,true,52,200,16000);
+    check(loop.isEnabled(),"unconfirmed seek preserves user's loop toggle");
+    loop.update(true,false,false,49,200,17000);check(loop.isEnabled(),"A/B and pause do not disable loop");
+    loop.restart();loop.update(true,true,true,2,20,18000);check(loop.isEnabled(),"shorter new track waits for compatible bounds");
+    check(!loop.setRange(50,49) && loop.isEnabled() && loop.getIn()==47,"invalid edit preserves enabled valid range");
+    check(loop.manualTarget(100,200)<51 && loop.manualTarget(0,200)==47,"manual seek stays in the active region");
+    loop.enable(false);check(!loop.isEnabled(),"explicit OFF clears loop");
     PlaybackFeedback feedback;
     feedback.report(0,100);feedback.request(true,200);
     check(feedback.state(200)==1,"play request changes displayed state immediately");
