@@ -1,15 +1,15 @@
-RefMatch 0.5.3
+RefMatch 0.5.4
 
 1. Upload RefMatch-mappen oven i den eksisterende mappe på GitHub.
 2. Erstat .github/workflows/main.yml med denne versions workflow.
-3. Vent på grønt build. Hent RefMatch-0.5.3-PluginOnly-macOS under Artifacts.
+3. Vent på grønt build. Hent RefMatch-0.5.4-PluginOnly-macOS under Artifacts.
 4. Luk Logic. Erstat RefMatch.component i /Library/Audio/Plug-Ins/Components/.
 5. Kør disse linjer i Terminal for denne lokale testversion:
 
 sudo xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/Components/RefMatch.component"
 sudo codesign --force --sign - "/Library/Audio/Plug-Ins/Components/RefMatch.component"
 
-6. Åbn Logic, og kontrollér versionsnummer 0.5.3. Pluginet skal være aktiveret.
+6. Åbn Logic, og kontrollér versionsnummer 0.5.4. Pluginet skal være aktiveret.
 
 LOOP
 Åbn LOOP. Træk et område på tidslinjen for at aktivere loop. Træk i enderne for
@@ -22,7 +22,10 @@ MATCH EQ
 RECORD MIX -> STOP MIX, RECORD REF -> STOP REF, MATCH. Vælg A for at høre resultatet.
 Grafens skala er fast for det beregnede match, mens Amount bevæges fra 0 til 100%.
 Smooth ændrer detaljegraden uden ny optagelse. TONE EQ åbner tre ekstra EQ-bånd
-med frekvens og gain. RESET TONE nulstiller dem. EQ ON gælder både Match og Tone.
+med frekvens og gain. TONE ON slår kun Tone-båndene til/fra uden at slette dem.
+RESET TONE nulstiller deres gain. EQ ON gælder både Match og Tone.
+Grafens skala vælges manuelt ved +/-24 dB-menuen og ændres ikke med Smooth/Tone.
+Vælg en større skala, hvis kurven går udenfor visningen.
 REF-måling og optagelse kan nu fortsætte, når Logic står stille. MIX kræver lyd fra Logic.
 EQ matcher frekvensbalancen; den gør ikke forskellige optagelser identiske.
 

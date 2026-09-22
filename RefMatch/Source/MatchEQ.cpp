@@ -37,7 +37,7 @@ void MatchEQ::refresh()
     std::array<EQDesign::Coeff,stages> coeff{};
     for(int b=0;b<EQDesign::bands;++b)coeff[b]=EQDesign::peak(sr,EQDesign::centre(b),gains[b]);
     const juce::SpinLock::ScopedLockType guard(lock);
-    for(int i=0;i<3;++i)coeff[EQDesign::bands+i]=EQDesign::peak(sr,tone[2*i+1],tone[2*i],.75);
+    for(int i=0;i<3;++i)coeff[EQDesign::bands+i]=EQDesign::peak(sr,tone[2*i+1],toneEnabled.load()?tone[2*i]:0.f,.75);
     published=coeff;dirty=true;
 }
 void MatchEQ::process(juce::AudioBuffer<float>& buffer)
@@ -68,6 +68,7 @@ std::vector<float> MatchEQ::getCurveDb(float displayAmount) const
 {
     const auto sr=rate.load();const auto gains=EQDesign::scaled(getGains(),displayAmount<0?amount.load():displayAmount,1000.,sr);
     std::array<float,6> manual;{const juce::SpinLock::ScopedLockType guard(lock);manual=tone;}
+    if(!toneEnabled.load())for(int i=0;i<3;++i)manual[2*i]=0;
     std::vector<float> result(180);
     for(int i=0;i<180;++i) {
         const double hz=20*std::pow(std::min(20000.,sr*.45)/20.,i/179.);

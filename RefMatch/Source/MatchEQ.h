@@ -11,6 +11,7 @@ public:
     void setAmount(float value) { amount.store(value); }
     void setMaxCorrectionDb(float value) { limit.store(value); }
     void setTone(const std::array<float,6>& value) {const juce::SpinLock::ScopedLockType guard(lock);tone=value;}
+    void setToneEnabled(bool enabled) {toneEnabled.store(enabled);}
     void setSmoothing(float value) { smoothing.store(value); }
     void learn(const std::array<float,SpectrumAnalyser::bins>&,
                const std::array<float,SpectrumAnalyser::bins>&,double sampleRate);
@@ -26,6 +27,7 @@ private:
     std::array<std::array<Stage,stages>,2> states{};
     std::array<EQDesign::Coeff,stages> current{},target{},published{};
     EQDesign::Gains learned{};
+    std::atomic<bool> toneEnabled{true};
     std::atomic<float> amount{.6f},limit{4},smoothing{.35f};
     std::atomic<double> rate{48000};
     mutable juce::SpinLock lock;

@@ -1,9 +1,21 @@
-# RefMatch 0.5.3 — independent reference analysis / Tone EQ
+# RefMatch 0.5.4 — independent reference analysis / Tone EQ
 
 AU/VST3 plugin only; no helper or standalone app. Uses the working system-media
 transport and 20 ms mix fade, with orange MIX and purple REFERENCE accents.
 
-## New in this version
+## 0.5.4 changes
+
+TONE ON independently bypasses the three manual bands, retaining their gains and
+frequencies. Switching uses the existing approximately 20 ms coefficient transition.
+The main EQ ON remains the master bypass. The new Tone enable parameter is saved
+with the project and defaults ON for compatibility with existing Tone settings.
+
+Graph range is now manually selected: +/-12, 24, 48 or 96 dB, default +/-24 dB.
+Smooth, Amount and Tone edits never change the axis. Range is saved with the project.
+If a curve exceeds the chosen range, it is clipped at the plot boundary and the
+caption asks for a wider range. This affects only the view, never the sound.
+
+## Retained from 0.5.3
 
 - PLAY from A uses the B-switch sequence: mute MIX, then start reference. It cannot
   intentionally start the reference while leaving the plugin's MIX path audible.

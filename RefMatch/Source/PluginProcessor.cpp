@@ -92,6 +92,8 @@ void RefMatchAudioProcessor::timerCallback()
         tone[2*i]=apvts.getRawParameterValue(id+"gain")->load();tone[2*i+1]=apvts.getRawParameterValue(id+"freq")->load();
     }
     if(tone!=lastTone){lastTone=tone;toneChanged=true;matchEQ.setTone(tone);}
+    const bool toneEnabled=apvts.getRawParameterValue("toneenabled")->load()>.5f;
+    if(toneEnabled!=lastToneEnabled){lastToneEnabled=toneEnabled;toneChanged=true;matchEQ.setToneEnabled(toneEnabled);}
     if(toneChanged)matchEQ.refresh();
     const float amount=apvts.getRawParameterValue("matchamount")->load()/100.f;
     const float limit=apvts.getRawParameterValue("maxcorrection")->load();
@@ -156,6 +158,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout RefMatchAudioProcessor::crea
         juce::NormalisableRange<float> range(30,16000,1);range.setSkewForCentre(1000);
         params.push_back(std::make_unique<juce::AudioParameterFloat>(id+"freq","Tone "+juce::String(i+1)+" Frequency",range,i==0?120.f:i==1?1000.f:8000.f));
     }
+    params.push_back(std::make_unique<juce::AudioParameterBool>("toneenabled","Tone EQ Enabled",true));
     return { params.begin(), params.end() };
 }
 

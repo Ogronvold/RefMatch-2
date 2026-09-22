@@ -1,4 +1,4 @@
-# RefMatch 0.5.3 validation
+# RefMatch 0.5.4 validation
 
 ## Architecture change
 
@@ -53,3 +53,16 @@ The new analysis ownership is a material change that requires the acceptance tes
 Private MediaRemote APIs remain optional and fallible. No helpers, subprocesses, or new
 external audio routes are introduced. Existing live-analyser audio-thread locks remain for
 MIX; this version does not claim hard realtime certification or sample-accurate Spotify seek.
+
+## 0.5.4 focused changes and acceptance
+
+Tone enable is appended as a parameter. Only the three manual stages ramp to identity;
+learned EQ and Tone values remain unchanged. DSP tests added for bypassed actual audio,
+retention of learned match response and exact restoration of Tone values.
+Plot scaling no longer reads either full-match or Tone curves. Only the range selector
+changes the scale; out-of-range curves are explicitly marked. Range persists in state.
+
+Local checks: source/UTF-8, CMake paths, workflow shell, control coordinates and archive.
+New C++ tests and Logic audition have not run locally (no Apple developer tools).
+Verify Smooth around 95.2-95.5%, all Tone controls, Amount, Tone on/off, range choices,
+clipped-curve label and save/reopen. Axis labels must remain unchanged during EQ edits.

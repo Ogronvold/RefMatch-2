@@ -82,5 +82,17 @@ int main()
         if(block>50)for(int i=0;i<512;++i)outputEnergy+=mix.getSample(0,i)*mix.getSample(0,i);
     }
     require(std::abs(10*std::log10(outputEnergy/inputEnergy)-3)<.15,"manual Tone EQ applies 3 dB to actual audio after matching");
+    const auto enabledToneCurve=eq.getCurveDb();
+    eq.setToneEnabled(false);eq.refresh();
+    for(auto db:eq.getCurveDb())require(std::abs(db)<.0001,"Tone OFF removes manual response at zero Match Amount");
+    for(int block=0;block<100;++block){mix.clear();eq.process(mix);}
+    for(int i=0;i<512;++i)mix.setSample(0,i,float(.1*std::sin(i*.2)));
+    original.makeCopyOf(mix);eq.process(mix);
+    for(int i=0;i<512;++i)require(std::abs(mix.getSample(0,i)-original.getSample(0,i))<.0001,"Tone OFF passes actual audio after ramp settles");
+    eq.setAmount(1);
+    float matchOnlyPeak=0;for(auto db:eq.getCurveDb())matchOnlyPeak=std::max(matchOnlyPeak,db);
+    require(matchOnlyPeak>2.9,"Tone OFF leaves the learned Match EQ active");
+    eq.setAmount(0);eq.setToneEnabled(true);eq.refresh();
+    require(eq.getCurveDb()==enabledToneCurve,"Tone ON restores the exact retained settings");
     std::cout<<"PASS: profile capture, silence, stereo power, frozen profiles, persistence on prepare, audible EQ and zero amount\n";
 }

@@ -32,7 +32,9 @@ private:
     juce::TextButton eqTab{"MATCH EQ"},loopTab{"LOOP"};
     juce::TextButton play{"PLAY"},toneButton{"TONE EQ"},toneReset{"RESET TONE"};
     juce::TextButton recordMix{"RECORD MIX"},recordRef{"RECORD REF"},match{"MATCH"},reset{"RESET"};
-    juce::ToggleButton eqOn{"EQ ON"};
+    juce::ToggleButton eqOn{"EQ ON"},toneOn{"TONE ON"};
+    juce::ComboBox graphRange;
+    float graphScale=24.f;
     juce::Slider gain,amount,smooth;
     std::array<juce::Slider,6> tone;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>,6> toneAttachments;
@@ -42,7 +44,7 @@ private:
     LoopTimeline timeline;
     juce::Label status,mixProfile,refProfile,position;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttach,amountAttach,smoothAttach;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> eqAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> eqAttach,toneOnAttach;
     juce::TooltipWindow tips{this,650};
     juce::String message;
     int page=1;

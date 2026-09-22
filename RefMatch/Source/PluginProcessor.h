@@ -102,6 +102,7 @@ private:
     MatchEQ matchEQ;
     LearnCapture learning;
     juce::String learningStatus {"Record MIX and REF, then press MATCH"};
+    bool lastToneEnabled=true;
     float lastAmount=-1,lastLimit=-1,lastSmooth=-1;
     std::array<float,6> lastTone{{-999,-999,-999,-999,-999,-999}};
     double lastEQRate=0;
