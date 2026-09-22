@@ -48,6 +48,14 @@ int main()
     }
     const double measured=10*std::log10(outputEnergy/inputEnergy);
     require(std::abs(measured-3)<.15,"100% Amount applies full 3 dB correction despite legacy saved limit");
+    const auto fullScaleCurve=eq.getCurveDb(1.f);
+    eq.setAmount(.5f);const auto halfCurve=eq.getCurveDb();
+    require(eq.getCurveDb(1.f)==fullScaleCurve,"graph full-scale response does not change with Amount");
+    eq.setAmount(.75f);const auto threeQuarterCurve=eq.getCurveDb();
+    eq.setAmount(1.f);const auto fullCurve=eq.getCurveDb();
+    float halfMax=0,threeQuarterMax=0,fullMax=0;
+    for(size_t i=0;i<fullCurve.size();++i){halfMax=std::max(halfMax,halfCurve[i]);threeQuarterMax=std::max(threeQuarterMax,threeQuarterCurve[i]);fullMax=std::max(fullMax,fullCurve[i]);}
+    require(halfMax<threeQuarterMax && threeQuarterMax<fullMax,"applied graph continues moving from 50 through 75 to 100 percent");
     eq.setAmount(0);eq.refresh();
     for(int block=0;block<100;++block){mix.clear();eq.process(mix);}
     for(int i=0;i<512;++i)mix.setSample(0,i,float(.1*std::sin(i*.2)));

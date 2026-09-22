@@ -19,9 +19,16 @@ public:
         enabled=value;track.clear();verifySeek=false;firstSeek=true;
         message=value?"Checking player position...":"Loop off";
     }
+    bool seek(double seconds) {
+        if(!position.valid || !std::isfinite(seconds))return false;
+        seconds=std::clamp(seconds,0.,position.duration>0?position.duration:86400.);
+        if(!controller.seekTo(seconds)){message="Player seek unavailable";return false;}
+        if(enabled && (seconds<in || seconds>=out)) {enabled=false;message="Loop off - seek outside selection";}
+        firstSeek=false;verifySeek=false;position.seconds=seconds;lastManualSeek=juce::Time::getMillisecondCounterHiRes();
+        return true;
+    }
+    bool skip(double delta) {return seek(position.seconds+delta);}
     bool isEnabled() const {return enabled;}
-    void setTimed(bool value) {timed=value;firstSeek=true;verifySeek=false;}
-    bool isTimed() const {return timed;}
     void setAuditioning(bool value) {auditioning=value;}
     double getIn() const {return in;}
     double getOut() const {return out;}
@@ -29,17 +36,6 @@ public:
     juce::String getStatus() const {return message;}
 private:
     void timerCallback() override {
-        if(enabled && timed) {
-            if(!auditioning) {firstSeek=true;message="Timed loop armed - select B";}
-            else {
-                const double now=juce::Time::getMillisecondCounterHiRes();
-                if(firstSeek || now-seekAt>=(out-in)*1000) {
-                    firstSeek=false;seekAt=now;
-                    if(!controller.seekTo(in)) {enabled=false;message="Seek unavailable - loop disabled";}
-                    else message="Timed loop - position / seek unverified";
-                }
-            }
-        }
         if(pending)return;
         pending=true;
         std::weak_ptr<int> weak=lifetime;
@@ -48,11 +44,17 @@ private:
             pending=false;
             const double now=juce::Time::getMillisecondCounterHiRes();
             if(!value.valid) {
+                position.valid=false; // Never seek using a stale position during the grace interval.
                 if(missingSince==0)missingSince=now;
-                if(!LoopTiming::missingExpired(now,missingSince)) {if(enabled)message="Waiting for player position...";return;}
+                if(!LoopTiming::missingExpired(now,missingSince)) {
+                    position.playbackKnown=value.playbackKnown;position.playing=value.playing;
+                    if(value.title.isNotEmpty()) {position.title=value.title;position.artist=value.artist;position.artwork=value.artwork;}
+                    if(enabled)message="Waiting for player position...";return;
+                }
             } else missingSince=0;
+            if(value.valid && now-lastManualSeek<600 && value.track==position.track)value.seconds=position.seconds;
             position=value;
-            if(!enabled || timed)return;
+            if(!enabled)return;
             if(!value.valid) {enabled=false;message="Position unavailable - loop disabled; A/B still works";return;}
             if(track.isEmpty())track=value.track;
             if(track.isNotEmpty() && value.track.isNotEmpty() && track!=value.track) {enabled=false;message="Track changed - set new loop points";return;}
@@ -73,7 +75,7 @@ private:
     SystemMediaController& controller;
     std::shared_ptr<int> lifetime=std::make_shared<int>(0);
     SystemMediaController::MediaPosition position;
-    bool timed=false,enabled=false,auditioning=false,pending=false,firstSeek=true,verifySeek=false;
-    double in=0,out=30,seekAt=0,missingSince=0;
+    bool enabled=false,auditioning=false,pending=false,firstSeek=true,verifySeek=false;
+    double in=0,out=30,seekAt=0,missingSince=0,lastManualSeek=-10000;
     juce::String track,message="Set In / Out, then enable loop";
 };

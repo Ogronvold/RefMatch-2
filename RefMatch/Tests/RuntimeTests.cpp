@@ -2,6 +2,8 @@
 #include "TransportSwitch.h"
 #include "EQDesign.h"
 #include "LoopTiming.h"
+#include "PlaybackFeedback.h"
+#include "LoopSelection.h"
 #include <cstdlib>
 #include <iostream>
 #include <vector>
@@ -13,6 +15,25 @@ void check(bool condition, const char* message)
 
 int main()
 {
+    PlaybackFeedback feedback;
+    feedback.report(0,100);feedback.request(true,200);
+    check(feedback.state(200)==1,"play request changes displayed state immediately");
+    feedback.report(0,400);
+    check(feedback.state(400)==1 && feedback.pending(400),"stale metadata does not undo requested PLAY");
+    feedback.report(1,600);
+    check(feedback.state(600)==1 && !feedback.pending(600),"playback metadata confirms PLAY");
+    feedback.request(false,700);check(feedback.state(700)==0,"pause request displays immediately");
+    feedback.failed();check(feedback.state(700)==1,"failed command restores reported playback");
+    feedback.request(false,800);feedback.report(1,5700);
+    check(feedback.state(5801)==1 && !feedback.pending(5801),"unconfirmed command expires to actual reported state");
+    check(feedback.state(9000)==-1,"old playback metadata expires");
+    const auto reverse=LoopSelection::drag(51,47,197);
+    check(reverse.start==47 && reverse.end==51,"reverse drag selects same loop range");
+    const auto edge=LoopSelection::drag(197,197,197);
+    check(edge.start==196.5 && edge.end==197,"minimum loop fits at track end");
+    const auto bounded=LoopSelection::drag(-10,300,197);
+    check(bounded.start==0 && bounded.end==197,"drag clamps to track duration");
+    check(LoopSelection::seconds(300,600,200)==100,"timeline midpoint maps to time");
     check(!LoopTiming::missingExpired(1200,1000), "one missing callback does not disable loop");
     check(LoopTiming::missingExpired(4000,1000), "sustained missing metadata expires");
     check(LoopTiming::confirmsSeek(101.8,100,104,1800), "seek confirmation allows playback during delayed metadata");

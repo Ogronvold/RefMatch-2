@@ -19,11 +19,13 @@ public:
     SystemMediaController();
     ~SystemMediaController();
     void request(Command, Completion);
-    struct MediaPosition { bool valid=false,playing=false,playbackKnown=false;double seconds=0,duration=0;juce::String track,title,artist; };
+    struct MediaPosition { bool valid=false,playing=false,playbackKnown=false;double seconds=0,duration=0;juce::String track,title,artist;juce::Image artwork; };
     using PositionCompletion=std::function<void(MediaPosition)>;
     void readPosition(PositionCompletion);
     bool seekTo(double seconds);
     bool isBusy() const;
+    int playbackState() const;
+    bool playbackPending() const;
     bool openSearch(const juce::String&, juce::String& error);
     void openAutomationSettings();
 private:

@@ -62,9 +62,9 @@ void MatchEQ::process(juce::AudioBuffer<float>& buffer)
         }
     }
 }
-std::vector<float> MatchEQ::getCurveDb() const
+std::vector<float> MatchEQ::getCurveDb(float displayAmount) const
 {
-    const auto sr=rate.load();const auto gains=EQDesign::scaled(getGains(),amount.load(),1000.,sr);
+    const auto sr=rate.load();const auto gains=EQDesign::scaled(getGains(),displayAmount<0?amount.load():displayAmount,1000.,sr);
     std::vector<float> result(180);
     for(int i=0;i<180;++i) {
         const double hz=20*std::pow(std::min(20000.,sr*.45)/20.,i/179.);

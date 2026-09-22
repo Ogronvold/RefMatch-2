@@ -2,6 +2,7 @@
 #import <AppKit/AppKit.h>
 #include <dlfcn.h>
 #include "SystemMediaController.h"
+#include "PlaybackFeedback.h"
 
 namespace {
 using SendCommand = Boolean (*)(int, NSDictionary*);
@@ -21,13 +22,24 @@ dispatch_queue_t mediaQueue()
 }
 struct SystemMediaController::Impl {
     std::atomic<bool> active { true }, busy { false };
+    PlaybackFeedback playback;
+    NSUInteger artworkHash=0;
+    bool artworkRead=false;
+    juce::String artworkTrack;
+    juce::Image artwork;
+
 };
 SystemMediaController::SystemMediaController() : impl(std::make_shared<Impl>()) {}
 SystemMediaController::~SystemMediaController() { impl->active.store(false); }
 bool SystemMediaController::isBusy() const { return impl->busy.load(); }
+int SystemMediaController::playbackState() const {return impl->playback.state(juce::Time::getMillisecondCounterHiRes());}
+bool SystemMediaController::playbackPending() const {return impl->playback.pending(juce::Time::getMillisecondCounterHiRes());}
 void SystemMediaController::request(Command command, Completion completion)
 {
     if (impl->busy.exchange(true)) { completion(false, {}, "Media command pending."); return; }
+    const auto now=juce::Time::getMillisecondCounterHiRes();
+    if(command==Command::play || command==Command::pause || command==Command::playPause)
+        impl->playback.request(command==Command::play || (command==Command::playPause && playbackState()!=1),now);
     auto state = impl;
     dispatch_async(mediaQueue(), ^{
         @autoreleasepool {
@@ -49,6 +61,7 @@ void SystemMediaController::request(Command command, Completion completion)
             // Never make success depend on restricted now-playing metadata.
             juce::MessageManager::callAsync([state, completion, ok, info, error] {
                 state->busy.store(false);
+                if(!ok)state->playback.failed();
                 if (state->active.load()) completion(ok, info, error);
             });
         }
@@ -73,15 +86,24 @@ void SystemMediaController::readPosition(PositionCompletion completion)
 {
     // Metadata is optional and never shares the transport busy flag.
     using ReadInfo = void (*)(dispatch_queue_t, void (^)(CFDictionaryRef));
+    using ReadPlaying = void (*)(dispatch_queue_t, void (^)(Boolean));
     static void* handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY | RTLD_LOCAL);
     static auto read = handle ? reinterpret_cast<ReadInfo>(dlsym(handle,"MRMediaRemoteGetNowPlayingInfo")) : nullptr;
+    static auto readPlaying=handle ? reinterpret_cast<ReadPlaying>(dlsym(handle,"MRMediaRemoteGetNowPlayingApplicationIsPlaying")) : nullptr;
     auto state=impl;
+    if(readPlaying)readPlaying(dispatch_get_main_queue(), ^(Boolean playing) {
+        if(state->active.load())state->playback.report(playing?1:0,juce::Time::getMillisecondCounterHiRes());
+    });
     auto delivered=std::make_shared<std::atomic<bool>>(false);
     auto deliver=[state,delivered,completion](MediaPosition position) {
-        if(!delivered->exchange(true) && state->active.load()) completion(position);
+        if(!delivered->exchange(true) && state->active.load()) {
+            if(!readPlaying && position.playbackKnown)state->playback.report(position.playbackKnown?(position.playing?1:0):-1,juce::Time::getMillisecondCounterHiRes());
+            completion(position);
+        }
     };
     if(!read) {deliver({});return;}
     read(dispatch_get_main_queue(), ^(CFDictionaryRef raw) {
+        if(delivered->load() || !state->active.load())return;
         MediaPosition position;
         if(raw) {
             NSDictionary* info=(__bridge NSDictionary*)raw;
@@ -100,14 +122,30 @@ void SystemMediaController::readPosition(PositionCompletion completion)
             if([artist isKindOfClass:NSString.class])position.artist=juce::String::fromUTF8([artist UTF8String]);
             position.playbackKnown=[rate respondsToSelector:@selector(doubleValue)];
             position.playing=position.playbackKnown && [rate doubleValue]>0;
+            // Prefer content identity: session identifiers can change while the same song plays.
+            NSString* identity=([title isKindOfClass:NSString.class] && [title length]>0)
+                ? [NSString stringWithFormat:@"%@|%@",title,artist ?: @""]
+                : (identifier ? [identifier description] : @"");
+            position.track=juce::String::fromUTF8(identity.UTF8String);
+            if(state->artworkTrack!=position.track) {
+                state->artwork={};state->artworkHash=0;state->artworkRead=false;state->artworkTrack=position.track;
+            }
+            NSData* imageData=get("kMRMediaRemoteNowPlayingInfoArtworkData");
+            if([imageData isKindOfClass:NSData.class] && [imageData length]>0 && [imageData length]<10*1024*1024) {
+                const auto hash=[imageData hash];
+                if(!state->artworkRead || state->artworkHash!=hash) {
+                    state->artwork=juce::ImageFileFormat::loadFrom([imageData bytes],size_t([imageData length]));
+                    state->artworkHash=hash;state->artworkRead=true;
+                }
+            }
+            position.artwork=state->artwork;
+            if([duration respondsToSelector:@selector(doubleValue)])position.duration=[duration doubleValue];
+            if(!std::isfinite(position.duration) || position.duration<0)position.duration=0;
             if([elapsed respondsToSelector:@selector(doubleValue)] && [rate respondsToSelector:@selector(doubleValue)]) {
                 position.seconds=[elapsed doubleValue];position.playing=[rate doubleValue]>0;
                 if([stamp isKindOfClass:NSDate.class] && position.playing)
                     position.seconds+=std::max(0.,std::min(86400.,-[stamp timeIntervalSinceNow]))*[rate doubleValue];
-                if([duration respondsToSelector:@selector(doubleValue)])position.duration=[duration doubleValue];
-                NSString* identity=identifier ? [identifier description] : [NSString stringWithFormat:@"%@|%@",title ?: @"",artist ?: @""];
-                position.track=juce::String::fromUTF8(identity.UTF8String);
-                position.valid=std::isfinite(position.seconds) && position.seconds>=0 && position.track!="|";
+                position.valid=std::isfinite(position.seconds) && position.seconds>=0 && position.track.isNotEmpty();
             }
         }
         deliver(position);

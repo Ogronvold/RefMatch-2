@@ -64,6 +64,7 @@ public:
     void autoGainMatch();
     void learnMatch();
     void clearMatch();
+    std::vector<float> getFullMatchCurveDb() const { return matchEQ.getCurveDb(1.f); }
     std::vector<float> getMatchCurveDb() const;
 
     std::array<float, SpectrumAnalyser::bins> getSourceSpectrum() const;
