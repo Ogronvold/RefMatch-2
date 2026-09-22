@@ -1,72 +1,56 @@
-# 0.5.1 validation and remaining checks
+# 0.5.2 validation
 
-## Basis
+## Implemented
 
-The user confirmed that 0.4.4 switches Spotify and MIX correctly. That transport is
-retained; new A/B buttons select its requested state. No mute regression was inferred
-from the earlier report after the user identified host bypass as the cause.
+Immediate requested-state playback feedback, separate MediaRemote playback polling,
+optional artwork-data decoding/cache, timeline selection and handles, manual seeking
+and +/-5 seconds, removal of search/TIMED UI, aligned meters, shorter empty-profile labels,
+and a full-correction-based EQ plot scale independent of the Amount slider.
 
-## Completed locally
+MediaRemote symbols are dynamically resolved. Artwork support follows the published
+community declarations at https://github.com/theos/headers/blob/master/MediaRemote/MediaRemote.h.
+No third-party code or framework binaries were bundled.
 
-- Reviewed source for thread ownership of learning, EQ coefficients and filter state.
-- Checked all source text as UTF-8, with balanced delimiters and existing CMake paths.
-- Checked the extracted workflow shell with bash syntax validation.
-- Native 0.5.1 UI remains untested; previous layout sketches describe 0.5.0 only.
-- Probed MRMediaRemoteGetNowPlayingInfo from the bundled Python process: callback
-  returned no dictionary. This does not establish what Logic will return, but supports
-  exposing metadata failure and a clearly labelled opt-in Timed-loop fallback.
-- Checked final ZIP integrity, required sources/tests/workflow, and no helper bundles.
+## Local checks
 
-## Not run
+Source UTF-8 and delimiter checks, CMake source-path checks and workflow shell syntax.
+Archive integrity and required-file checks. Static UI coordinate overlap check.
+A layout sketch is only a coordinate review, not native plugin rendering.
 
-This Mac still lacks an Apple developer toolchain. 0.5.1 was not compiled locally.
-The C++ suites below were added but have not executed. No native UI rendering,
-Logic EQ audition, profile save/reload or real Spotify looping was performed.
-Earlier green builds do not validate these new changes.
+No C++ compilation, C++ test execution or native Logic/Spotify audition was possible:
+xcode-select reports no active developer directory. A green earlier version does not
+validate this candidate. GitHub Actions must build and run the updated tests.
 
-## Automated checks included in GitHub Actions
+## Regression tests included
 
-RefMatchRuntime: existing 20 ms fade/transport tests, level-normalisation producing
-flat EQ, bounded finite EQ response.
+Existing fade, transport, capture and EQ signal tests, plus:
+- PLAY/PAUSE requested state is immediate; stale metadata cannot immediately undo it.
+- Confirmation clears pending state, rejection rolls back, stale requests/state expire.
+- Timeline reverse drag, minimum range at track end, bounds and coordinate mapping.
+- EQ response continues increasing from 50% through 75% to 100%; its full-scale
+  reference curve remains unchanged by Amount.
 
-RefMatchDSP: JUCE-based signal test that records separate MIX/REF spectra, verifies
-opposite-phase stereo capture and silence rejection, checks frozen profile retention,
-preserves gains through prepare, measures actual 3 dB filter gain on a sine signal,
-and confirms zero Amount passes signal transparently.
+## Required in Logic
 
-## Required Logic acceptance
+1. Both tests/build pass; install 0.5.2. Verify A/B/SWITCH still mute/start and pause/restore.
+2. Click PLAY/PAUSE, including rapid changes; check prompt label response and reconciliation.
+   Also pause in Spotify and check reported state. Missing status must never display PLAY/PAUSE.
+3. Confirm title/artist, actual supplied artwork, placeholder when unavailable and no old
+   cover after switching tracks. Cover decoding is cached, not performed per audio block.
+4. Timeline: drag both directions, resize each edge, select near the end, click to seek,
+   skip repeatedly, enable/disable, switch A/B, change song, and temporarily lose metadata.
+5. Confirm loop handles and numeric times agree, including fractional seconds. Loop selection
+   is at least 0.5 s; playback seek is not sample-accurate and depends on the external player.
+6. Record MIX/REF and MATCH; move Amount from 0 to 100% with a strong correction. Scale stays
+   fixed for that correction and the graph continues moving beyond 50%. Verify audible EQ.
+7. Save/reopen profiles and test sample-rate changes. Native UI size and typography need testing.
 
-1. Build and both tests pass. Confirm 0.5.1 and compact tab heights on a real display.
-2. A, B and SWITCH both ways, playing/stopped host, editor close, optional meters off.
-3. RECORD MIX/STOP and RECORD REF/STOP from Spotify. Both frozen profiles should
-   remain available. Confirm the count advances only while audio processing occurs.
-4. MATCH automatically enables EQ. On A, compare EQ ON/OFF and Amount 0/100%; graph
-   should correspond to tonal change, and old saved Limit values must not reduce the correction.
-5. Save/reopen project, reopen editor and change sample rate: captures/gains persist.
-   Recording is stopped on session load; MIX is restored. No unintentional Spotify PLAY.
-6. Test no audio, denied capture, source quit, very quiet material, mono and stereo.
-7. Loop known In/Out in Spotify. Verify mode must tolerate brief missing positions and disable after 3 seconds without positions, track
-   change or failed seek. Timed mode is explicitly unverified and can drift if the
-   source buffers, pauses externally or ignores seek. It must not block A/B.
-8. Loop disabled before track switch/removing plugin; test return to A and back to B.
+## Boundaries
 
-## Limits
-
-Broad 20-band tonal matching is not algorithmically identical to Apple's Match EQ.
-The FFT limits bass resolution. Existing live analyser locks and oversized host-buffer
-allocation behavior are retained; the full processor is not certified hard realtime.
-Ref learning depends on host audio callbacks. Private MediaRemote position/seek may
-be unavailable or ignored. Timed loop cannot guarantee the right section without
-successful seek and should not be presented as verified. One controlling instance.
-
-## 0.5.1 changes
-
-Loop no longer disarms on unchanged In/Out focus events or one missing callback.
-Position extrapolation no longer stops advancing five seconds after the timestamp.
-Seek confirmation allows normal playback advance during metadata delivery delays.
-Confirmed mode still stops if the source cannot confirm seek or stops supplying data.
-Metadata display uses the existing optional MediaRemote read; it does not force access
-when macOS withholds it. Playback indicator represents reported state, not command acceptance.
-The legacy maxcorrection parameter ID remains for old Logic sessions, but no longer
-scales the curve. Internal fitted per-band bounds remain; Amount is the only UI amount.
-DSP regression asserts that a saved 0.5 dB limit does not suppress a 3 dB correction.
+Transport controls the current system media player, not an authenticated Spotify session.
+Playback feedback is initially requested state, not proof of sound; tooltip identifies it.
+Private API metadata/cover/seek may be absent or delayed. Timeline is a time ruler, not a
+waveform of the full Spotify track. Loop is processor-owned but not sample-accurate;
+state/ranges are not persisted across plugin recreation. One controlling instance.
+MIX/REF learning depends on host audio callbacks; existing analyser realtime limitations
+remain. Broad 20-band EQ matches tonal balance, not identical sound or Apple's exact algorithm.

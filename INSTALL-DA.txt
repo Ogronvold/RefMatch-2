@@ -1,33 +1,32 @@
-RefMatch 0.5.1 — kildekandidat
+RefMatch 0.5.2
 
-UPLOAD / INSTALLATION
-1. Upload RefMatch-mappen fra denne ZIP til repoets rod og erstat filerne.
+1. Upload RefMatch-mappen oven i den eksisterende mappe på GitHub.
 2. Erstat .github/workflows/main.yml med denne versions workflow.
-3. Vent på grønt build, og hent RefMatch-0.5.1-PluginOnly-macOS under Artifacts.
-4. Luk Logic helt. Erstat den installerede RefMatch.component med den nye.
-5. Åbn Logic og kontrollér 0.5.1 i pluginet.
+3. Vent på grønt build. Hent RefMatch-0.5.2-PluginOnly-macOS under Artifacts.
+4. Luk Logic. Erstat RefMatch.component i /Library/Audio/Plug-Ins/Components/.
+5. Kør disse linjer i Terminal for denne lokale testversion:
 
-A/B
-Afspil den ønskede mediekilde én gang, så macOS kender den. A vælger mix,
-B vælger reference, og SWITCH skifter. Transporten er fra den fungerende 0.4.4.
-Pluginet skal være aktiveret på den kanal/bus, hvis lyd du vil mute.
+sudo xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/Components/RefMatch.component"
+sudo codesign --force --sign - "/Library/Audio/Plug-Ins/Components/RefMatch.component"
 
-MATCH EQ
-Start Logic-afspilning. RECORD MIX -> lad mixet spille -> STOP MIX.
-RECORD REF -> giv eventuelt capture-tilladelse -> lad referencen spille -> STOP REF.
-MATCH beregner og aktiverer EQ. Klik A for at høre resultatet på dit mix.
-Amount og EQ ON styrer resultatet. Grafen viser filterets respons.
-Optag helst flere sekunder. Både MIX og REF skal have mindst 0,5 s brugbart signal.
-Profiler og lærte EQ-gains gemmes med projektet. MATCH er en tonal tilnærmelse,
-ikke en kopi af Logics algoritme. REF-optagelse kræver, at Logic behandler lyd.
+6. Åbn Logic, og kontrollér versionsnummer 0.5.2. Pluginet skal være aktiveret.
 
 LOOP
-Indtast In og Out, f.eks. 0:45 og 1:15, og slå LOOP til. Vælg B for at lytte.
-Normal tilstand kræver positionsdata og kontrollerer seek. Hvis den fejler, kan
-TIMED vælges: den sender seek med det indtastede interval uden positionsbekræftelse.
-Slå Timed-loop fra før trackskift eller pause uden for RefMatch. Seek er afhængig
-af medieafspilleren og ikke samplepræcis. Loopfejl må ikke stoppe A/B.
+Åbn LOOP. Træk et område på tidslinjen for at aktivere loop. Træk i enderne for
+at ændre området. Klik på tidslinjen væk fra håndtagene for at flytte afspilningen.
+In/Out kan også indtastes. Vælg B for at høre loopet. -5 s / +5 s flytter afspilningen.
+Flytter du uden for et aktivt loop, slås loop fra. Ved trackskift skal du vælge igen.
+Tidslinje og skip kræver gyldige positionsdata fra afspilleren. TIMED er fjernet.
+
+MATCH EQ
+RECORD MIX -> STOP MIX, RECORD REF -> STOP REF, MATCH. Vælg A for at høre resultatet.
+Grafens skala er fast for det beregnede match, mens Amount bevæges fra 0 til 100%.
+EQ matcher frekvensbalancen; den gør ikke forskellige optagelser identiske.
+
+PLAY / COVER
+Knappen viser PLAY eller PAUSE. Klik vises straks som ønsket tilstand, og afspillerens
+status bekræfter efterfølgende. Cover vises, når macOS leverer billedet.
 
 TESTSTATUS
-0.5.1 er ikke bygget eller testet i Logic lokalt. GitHub skal bygge og køre testene.
-Der medfølger ingen app/helper. Buildet er ad-hoc-signeret, ikke notariseret.
+Kildekandidat: ikke bygget eller afprøvet i Logic lokalt. GitHub skal bygge og køre testene.
+Kun plugins; ingen app/helper. Ad-hoc-signeret, ikke Developer ID-notariseret.
