@@ -1,19 +1,19 @@
-RefMatch 0.5.2
+RefMatch 0.5.3
 
 1. Upload RefMatch-mappen oven i den eksisterende mappe på GitHub.
 2. Erstat .github/workflows/main.yml med denne versions workflow.
-3. Vent på grønt build. Hent RefMatch-0.5.2-PluginOnly-macOS under Artifacts.
+3. Vent på grønt build. Hent RefMatch-0.5.3-PluginOnly-macOS under Artifacts.
 4. Luk Logic. Erstat RefMatch.component i /Library/Audio/Plug-Ins/Components/.
 5. Kør disse linjer i Terminal for denne lokale testversion:
 
 sudo xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/Components/RefMatch.component"
 sudo codesign --force --sign - "/Library/Audio/Plug-Ins/Components/RefMatch.component"
 
-6. Åbn Logic, og kontrollér versionsnummer 0.5.2. Pluginet skal være aktiveret.
+6. Åbn Logic, og kontrollér versionsnummer 0.5.3. Pluginet skal være aktiveret.
 
 LOOP
 Åbn LOOP. Træk et område på tidslinjen for at aktivere loop. Træk i enderne for
-at ændre området. Klik på tidslinjen væk fra håndtagene for at flytte afspilningen.
+at ændre området. Træk i den hvide markør og slip for at flytte afspilningen.
 In/Out kan også indtastes. Vælg B for at høre loopet. -5 s / +5 s flytter afspilningen.
 Flytter du uden for et aktivt loop, slås loop fra. Ved trackskift skal du vælge igen.
 Tidslinje og skip kræver gyldige positionsdata fra afspilleren. TIMED er fjernet.
@@ -21,10 +21,13 @@ Tidslinje og skip kræver gyldige positionsdata fra afspilleren. TIMED er fjerne
 MATCH EQ
 RECORD MIX -> STOP MIX, RECORD REF -> STOP REF, MATCH. Vælg A for at høre resultatet.
 Grafens skala er fast for det beregnede match, mens Amount bevæges fra 0 til 100%.
+Smooth ændrer detaljegraden uden ny optagelse. TONE EQ åbner tre ekstra EQ-bånd
+med frekvens og gain. RESET TONE nulstiller dem. EQ ON gælder både Match og Tone.
+REF-måling og optagelse kan nu fortsætte, når Logic står stille. MIX kræver lyd fra Logic.
 EQ matcher frekvensbalancen; den gør ikke forskellige optagelser identiske.
 
 PLAY / COVER
-Knappen viser PLAY eller PAUSE. Klik vises straks som ønsket tilstand, og afspillerens
+PLAY fra A muter mixet og vælger B. Knappen viser PLAY eller PAUSE. Klik vises straks som ønsket tilstand, og afspillerens
 status bekræfter efterfølgende. Cover vises, når macOS leverer billedet.
 
 TESTSTATUS

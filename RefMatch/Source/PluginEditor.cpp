@@ -1,6 +1,6 @@
 #include "PluginEditor.h"
 namespace {
-const juce::Colour black(0xff08090c),panel(0xff101217),line(0xff242830),text(0xffeef1f7),muted(0xff808897),cyan(0xff76e5d1),violet(0xffb3a0ff);
+const juce::Colour black(0xff090e16),panel(0xff111824),line(0xff2a3445),text(0xffeef1f7),muted(0xff808897),cyan(0xffffad42),violet(0xffb16af3);
 void label(juce::Label& l,float size,juce::Colour colour=muted) {
     l.setFont(juce::Font(juce::FontOptions(size)));l.setColour(juce::Label::textColourId,colour);
 }
@@ -26,20 +26,37 @@ RefMatchLookAndFeel::RefMatchLookAndFeel()
 void RefMatchLookAndFeel::drawButtonBackground(juce::Graphics& g,juce::Button& button,const juce::Colour& colour,bool over,bool down)
 {
     auto r=button.getLocalBounds().toFloat().reduced(.5f);
-    g.setColour(colour.withMultipliedBrightness(down?.8f:over?1.2f:1.f));
+    const auto fill=colour.withMultipliedBrightness(down?.8f:over?1.2f:1.f);
+    if(button.getToggleState() && bool(button.getProperties()["dualAccent"]))
+        g.setGradientFill(juce::ColourGradient(cyan,r.getTopLeft(),violet,r.getTopRight(),false));
+    else g.setGradientFill(juce::ColourGradient(fill.brighter(.10f),r.getTopLeft(),fill.darker(.10f),r.getBottomLeft(),false));
     g.fillRoundedRectangle(r,7);
-    g.setColour(button.getToggleState()?cyan.withAlpha(.7f):line);g.drawRoundedRectangle(r,7,1);
+    g.setColour(button.getToggleState()?colour.withAlpha(.7f):line);g.drawRoundedRectangle(r,7,1);
+}
+void RefMatchLookAndFeel::drawLinearSlider(juce::Graphics& g,int x,int y,int width,int height,float position,float,float,juce::Slider::SliderStyle,juce::Slider& slider)
+{
+    const float mid=y+height*.5f;
+    g.setColour(line);g.fillRoundedRectangle(float(x),mid-2,float(width),4,2);
+    const auto accent=slider.findColour(juce::Slider::trackColourId);
+    g.setGradientFill(juce::ColourGradient(bool(slider.getProperties()["dualAccent"])?cyan:accent,float(x),mid,bool(slider.getProperties()["dualAccent"])?violet:accent,float(x+width),mid,false));
+    g.fillRoundedRectangle(float(x),mid-2,std::max(0.f,position-x),4,2);
+    g.setColour(accent.withAlpha(.15f));g.fillEllipse(position-8,mid-8,16,16);
+    g.setColour(text);g.fillEllipse(position-5,mid-5,10,10);
 }
 RefMatchAudioProcessorEditor::RefMatchAudioProcessorEditor(RefMatchAudioProcessor& p):AudioProcessorEditor(&p),processor(p)
 {
     setLookAndFeel(&look);setResizable(false,false);
-    for(juce::Component* c:std::initializer_list<juce::Component*>{&a,&b,&switchButton,&eqTab,&loopTab,&play,&meters,&autoGain,
-        &recordMix,&recordRef,&match,&reset,&eqOn,&gain,&amount,&back,&forward,&timeline,&inTime,&outTime,&setIn,&setOut,&loopOn,
+    for(juce::Component* c:std::initializer_list<juce::Component*>{&a,&b,&switchButton,&eqTab,&loopTab,&play,&toneButton,&toneReset,
+        &recordMix,&recordRef,&match,&reset,&eqOn,&gain,&amount,&smooth,&back,&forward,&timeline,&inTime,&outTime,&setIn,&setOut,&loopOn,
         &status,&mixProfile,&refProfile,&position})addAndMakeVisible(c);
     a.onClick=[this]{processor.selectSource(false);};b.onClick=[this]{processor.selectSource(true);};
     switchButton.onClick=[this]{processor.switchWithSystemMedia();};
     eqTab.onClick=[this]{setPage(1);};loopTab.onClick=[this]{setPage(2);};
-    play.onClick=[this]{transport(processor.getMediaController().playbackState()==1?SystemMediaController::Command::pause:SystemMediaController::Command::play);timerCallback();};
+    play.onClick=[this]{
+        if(!processor.isReferenceSelected())processor.selectSource(true);
+        else transport(processor.getMediaController().playbackState()==1?SystemMediaController::Command::pause:SystemMediaController::Command::play);
+        timerCallback();
+    };
     back.onClick=[this]{processor.getLoop().skip(-5);};forward.onClick=[this]{processor.getLoop().skip(5);};
     back.setTooltip("Back 5 seconds");forward.setTooltip("Forward 5 seconds");
     timeline.onRange=[this](double start,double end){
@@ -47,15 +64,29 @@ RefMatchAudioProcessorEditor::RefMatchAudioProcessorEditor(RefMatchAudioProcesso
         if(processor.getLoop().setRange(start,end))processor.getLoop().enable(true);
     };
     timeline.onSeek=[this](double seconds){processor.getLoop().seek(seconds);};
-    autoGain.onClick=[this]{processor.autoGainMatch();};
-    meters.onClick=[this]{processor.startReferenceCapture();};
+    toneButton.onClick=[this]{showTone=!showTone;setPage(page);};
+    toneReset.onClick=[this]{for(int i=0;i<3;++i) {
+        const auto id="tone"+juce::String(i)+"gain";
+        auto* p=processor.apvts.getParameter(id);p->beginChangeGesture();p->setValueNotifyingHost(p->convertTo0to1(0));p->endChangeGesture();
+    }};
     recordMix.onClick=[this]{processor.recordProfile(LearnCapture::mix);};
     recordRef.onClick=[this]{processor.recordProfile(LearnCapture::reference);};
     match.onClick=[this]{processor.learnMatch();};reset.onClick=[this]{processor.clearMatch();};
-    for(auto* slider:{&gain,&amount}) {slider->setSliderStyle(juce::Slider::LinearHorizontal);slider->setTextBoxStyle(juce::Slider::TextBoxRight,false,66,24);}
-    gain.setTextValueSuffix(" dB");amount.setTextValueSuffix(" %");
+    for(auto* slider:{&gain,&amount,&smooth}) {slider->setSliderStyle(juce::Slider::LinearHorizontal);slider->setTextBoxStyle(juce::Slider::TextBoxRight,false,66,24);}
+    gain.setTextValueSuffix(" dB");amount.setTextValueSuffix(" %");smooth.setTextValueSuffix(" %");
     gainAttach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.apvts,"sourcegain",gain);
     amountAttach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.apvts,"matchamount",amount);
+    smoothAttach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.apvts,"smooth",smooth);
+    smooth.setTooltip("Fine to broad correction. Recalculates from captured profiles without recording again.");
+    amount.getProperties().set("dualAccent",true);smooth.setColour(juce::Slider::trackColourId,violet);
+    for(int i=0;i<6;++i) {
+        addAndMakeVisible(tone[i]);tone[i].setSliderStyle(juce::Slider::LinearHorizontal);
+        tone[i].setTextBoxStyle(juce::Slider::TextBoxRight,false,70,22);
+        tone[i].setTextValueSuffix(i%2?" Hz":" dB");tone[i].setColour(juce::Slider::trackColourId,violet);
+        toneAttachments[i]=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.apvts,"tone"+juce::String(i/2)+(i%2?"freq":"gain"),tone[i]);
+    }
+    for(auto* button:{&b,&play,&recordRef})button->setColour(juce::TextButton::buttonOnColourId,violet);
+    eqTab.getProperties().set("dualAccent",true);loopTab.getProperties().set("dualAccent",true);
     eqAttach=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.apvts,"matchenabled",eqOn);
     inTime.setText(rangeText(p.getLoop().getIn()));outTime.setText(rangeText(p.getLoop().getOut()));
     inTime.onReturnKey=[this]{updateLoopRange();};outTime.onReturnKey=inTime.onReturnKey;
@@ -68,7 +99,6 @@ RefMatchAudioProcessorEditor::RefMatchAudioProcessorEditor(RefMatchAudioProcesso
     recordMix.setTooltip("Record the incoming MIX spectrum before EQ. Click again to finish.");
     recordRef.setTooltip("Record system-reference spectrum. Requires capture permission and host audio processing. Click again to finish.");
     match.setTooltip("Calculate EQ from the two captured profiles and enable it on MIX.");
-    meters.setTooltip("Optional ScreenCaptureKit analysis. A/B works without it.");
     loopOn.setTooltip("Loop the active source between In and Out. Requires player position and seek support.");
     setPage(1);processor.startReferenceCapture();startTimerHz(15);
 }
@@ -76,9 +106,12 @@ RefMatchAudioProcessorEditor::~RefMatchAudioProcessorEditor(){stopTimer();setLoo
 void RefMatchAudioProcessorEditor::setPage(int value)
 {
     page=value;
-    for(auto* c:std::initializer_list<juce::Component*>{&recordMix,&recordRef,&match,&reset,&eqOn,&amount,&mixProfile,&refProfile})c->setVisible(page==1);
+    for(auto* c:std::initializer_list<juce::Component*>{&recordMix,&recordRef,&match,&reset,&eqOn,&amount,&smooth,&toneButton,&mixProfile,&refProfile})c->setVisible(page==1);
     for(auto* c:std::initializer_list<juce::Component*>{&inTime,&outTime,&setIn,&setOut,&loopOn,&timeline,&position})c->setVisible(page==2);
-    setSize(640,page==1?550:430);
+    toneButton.setToggleState(showTone,juce::dontSendNotification);
+    toneReset.setVisible(page==1 && showTone);
+    for(auto& control:tone)control.setVisible(page==1 && showTone);
+    setSize(640,page==1?(showTone?660:580):430);
     resized();repaint();
 }
 void RefMatchAudioProcessorEditor::transport(SystemMediaController::Command c)
@@ -139,12 +172,11 @@ void RefMatchAudioProcessorEditor::timerCallback()
     const auto p=processor.getLoop().getPosition();position.setText(p.valid?timeText(p.seconds)+"  /  "+timeText(p.duration):"Position unavailable",juce::dontSendNotification);
     const auto playback=processor.getMediaController().playbackState();
     play.setToggleState(playback==1,juce::dontSendNotification);
-    play.setButtonText(playback==1?"PAUSE":"PLAY");
+    play.setButtonText(processor.isReferenceSelected() && playback==1?"PAUSE":"PLAY");
     play.setTooltip(processor.getMediaController().playbackPending()?"Command sent - waiting for player status":playback<0?"Player status unavailable; click to play":"Current player playback state");
     play.setEnabled(!processor.isTransportPending() && !processor.getMediaController().isBusy());
     back.setEnabled(p.valid);forward.setEnabled(p.valid);
     timeline.update(p.seconds,p.duration,processor.getLoop().getIn(),processor.getLoop().getOut(),processor.getLoop().isEnabled(),p.valid,p.track);
-    autoGain.setEnabled(processor.hasReferenceAudio());
     setIn.setEnabled(p.valid);setOut.setEnabled(p.valid);
     repaint();
 }
@@ -155,22 +187,31 @@ void RefMatchAudioProcessorEditor::drawSpectrum(juce::Graphics& g,juce::Rectangl
     for(int i=0;i<=4;++i){const float y=plot.getY()+plot.getHeight()*i/4;g.drawHorizontalLine(int(y),plot.getX(),plot.getRight());}
     for(double hz:{100.,1000.,10000.}) {const float x=plot.getX()+float(std::log(hz/20.)/std::log(1000.))*plot.getWidth();g.drawVerticalLine(int(x),plot.getY(),plot.getBottom());}
     if(eq) {
-        const auto curve=processor.getMatchCurveDb();float scale=12.f;for(auto db:processor.getFullMatchCurveDb())scale=std::max(scale,std::ceil(std::abs(db)/6.f)*6.f);juce::Path path;
+        const auto curve=processor.getMatchCurveDb();float scale=12.f;for(auto db:processor.getFullMatchCurveDb())scale=std::max(scale,std::ceil(std::abs(db)/6.f)*6.f);for(auto db:processor.getToneCurveDb())scale=std::max(scale,std::ceil(std::abs(db)/6.f)*6.f);juce::Path path;
         for(size_t i=0;i<curve.size();++i) {const float x=plot.getX()+float(i)/float(curve.size()-1)*plot.getWidth();const float y=plot.getCentreY()-curve[i]/(2*scale)*plot.getHeight();if(i==0)path.startNewSubPath(x,y);else path.lineTo(x,y);}
-        g.setColour(eqOn.getToggleState()?cyan:muted);g.strokePath(path,juce::PathStrokeType(2));
+        g.setColour(eqOn.getToggleState()?text:muted);g.strokePath(path,juce::PathStrokeType(2));
         g.setFont(juce::Font(juce::FontOptions(10)));g.setColour(muted);g.drawText(juce::String("+/- ")+juce::String(scale,0)+" dB   "+(eqOn.getToggleState()?"APPLIED EQ RESPONSE":"EQ BYPASSED / STORED CURVE"),r.reduced(12).removeFromTop(14),juce::Justification::left);
     }else{
         for(int side=0;side<2;++side){auto values=side?processor.getReferenceSpectrum():processor.getSourceSpectrum();juce::Path path;
             for(int i=0;i<180;++i){const double hz=20*std::pow(1000.,i/179.);const int index=std::clamp(int(hz*SpectrumAnalyser::fftSize/processor.getSampleRateForDisplay()),1,SpectrumAnalyser::bins-1);const float x=plot.getX()+i/179.f*plot.getWidth(),y=plot.getBottom()-std::clamp((values[index]+100)/100.f,0.f,1.f)*plot.getHeight();if(!i)path.startNewSubPath(x,y);else path.lineTo(x,y);}
             g.setColour(side?violet:cyan);g.strokePath(path,juce::PathStrokeType(1.5f));}
     }
-    g.setFont(juce::Font(juce::FontOptions(9)));g.setColour(muted);g.drawText("20 Hz                                             1 kHz                                            20 kHz",r.reduced(12,2).removeFromBottom(14),juce::Justification::centred);
+    g.setFont(juce::Font(juce::FontOptions(9)));g.setColour(muted);for(double hz:{20.,100.,1000.,10000.,20000.}) {
+        const float x=plot.getX()+float(std::log(hz/20.)/std::log(1000.))*plot.getWidth();
+        g.drawText(hz<1000?juce::String(int(hz))+" Hz":juce::String(int(hz/1000))+" kHz",juce::Rectangle<float>(std::clamp(x-22,r.getX()+4,r.getRight()-48),r.getBottom()-16,44,14),juce::Justification::centred);
+    }
 }
 void RefMatchAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(black);g.setColour(text);g.setFont(juce::Font(juce::FontOptions(23,juce::Font::bold)));g.drawText("RefMatch",20,12,170,30,juce::Justification::left);
-    g.setFont(juce::Font(juce::FontOptions(10)));g.setColour(muted);g.drawText("0.5.2   /   STREAM",455,18,164,20,juce::Justification::right);
-    for(auto r:{juce::Rectangle<float>(20,60,250,114),juce::Rectangle<float>(370,60,250,114)}){g.setColour(panel);g.fillRoundedRectangle(r,12);g.setColour(line);g.drawRoundedRectangle(r,12,1);}
+    g.fillAll(black);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff172238),0,0,black,640,250,false));g.fillRect(getLocalBounds());g.setColour(text);g.setFont(juce::Font(juce::FontOptions(23,juce::Font::bold)));g.drawText("RefMatch",20,12,170,30,juce::Justification::left);
+    g.setFont(juce::Font(juce::FontOptions(10)));g.setColour(muted);g.drawText("0.5.3   /   STREAM",455,18,164,20,juce::Justification::right);
+    for(int side=0;side<2;++side) {
+        const juce::Rectangle<float> r(side?370.f:20.f,60,250,114);
+        g.setGradientFill(juce::ColourGradient(panel.brighter(.12f),r.getTopLeft(),panel.darker(.12f),r.getBottomRight(),false));g.fillRoundedRectangle(r,12);
+        g.setColour((side?violet:cyan).withAlpha((side==int(processor.isReferenceSelected()))?.65f:.22f));g.drawRoundedRectangle(r,12,1);
+    }
+    g.setColour(muted);g.setFont(juce::Font(juce::FontOptions(10)));g.drawText("Match your sound.",21,41,180,14,juce::Justification::left);
     g.setColour(text);g.setFont(juce::Font(juce::FontOptions(13,juce::Font::bold)));g.drawText("YOUR MIX",87,75,150,20,juce::Justification::left);
     g.setFont(juce::Font(juce::FontOptions(11)));g.setColour(muted);g.drawText("Gain",36,123,40,24,juce::Justification::left);
     const auto media=processor.getLoop().getPosition();
@@ -197,13 +238,14 @@ void RefMatchAudioProcessorEditor::paint(juce::Graphics& g)
         for(int side=0;side<2;++side) {
             const juce::Rectangle<float> box(side?328.f:20.f,302,292,62);
             g.setColour(panel);g.fillRoundedRectangle(box,6);
+            g.setColour(line.withAlpha(.5f));for(int row=0;row<3;++row)g.drawHorizontalLine(int(box.getY()+24+row*14),box.getX()+6,box.getRight()-6);
             const auto snapshot=processor.profile(side?LearnCapture::reference:LearnCapture::mix);
             const auto live=side?processor.getReferenceSpectrum():processor.getSourceSpectrum();
             const auto colour=side?violet:cyan;
             for(int stored=0;stored<2;++stored) {
                 if(stored && !snapshot.ready)continue;
                 const auto& data=stored?snapshot.db:live;
-                const double rate=stored?snapshot.sampleRate:processor.getSampleRateForDisplay();
+                const double rate=stored?snapshot.sampleRate:side?ReferenceAnalysis::sampleRate:processor.getSampleRateForDisplay();
                 juce::Path path;
                 for(int i=0;i<140;++i) {
                     const double hz=20*std::pow(1000.,i/139.);
@@ -212,22 +254,33 @@ void RefMatchAudioProcessorEditor::paint(juce::Graphics& g)
                     const float y=box.getBottom()-5-std::clamp((data[index]+100)/100.f,0.f,1.f)*36;
                     if(i==0)path.startNewSubPath(x,y);else path.lineTo(x,y);
                 }
+                if(stored) {
+                    auto fill=path;fill.lineTo(box.getRight()-6,box.getBottom()-5);fill.lineTo(box.getX()+6,box.getBottom()-5);fill.closeSubPath();
+                    g.setGradientFill(juce::ColourGradient(colour.withAlpha(.22f),box.getTopLeft(),colour.withAlpha(0.f),box.getBottomLeft(),false));g.fillPath(fill);
+                }
                 g.setColour(colour.withAlpha(stored?1.f:.35f));g.strokePath(path,juce::PathStrokeType(stored?1.7f:1.f));
             }
             g.setFont(juce::Font(juce::FontOptions(9)));g.setColour(muted);
-            g.drawText("LIVE (dim) / RECORDING OR CAPTURED (bright)",box.reduced(6).removeFromTop(12),juce::Justification::left);
+            g.drawText(side?"REFERENCE    LIVE / CAPTURED":"YOUR MIX    LIVE / CAPTURED",box.reduced(6).removeFromTop(12),juce::Justification::left);
         }
-        drawSpectrum(g,{20,370,600,94},true);g.setColour(muted);g.drawText("Amount",22,476,55,24,juce::Justification::left);}
-    if(page==2){g.setColour(muted);g.drawText("IN",20,316,30,20,juce::Justification::left);g.drawText("OUT",238,316,34,20,juce::Justification::left);g.drawText("Drag to loop. Drag an edge to resize. Click elsewhere to seek.",20,370,600,20,juce::Justification::left);}
+        drawSpectrum(g,{20,370,600,94},true);g.setColour(muted);g.drawText("Amount",22,476,55,24,juce::Justification::left);g.drawText("Smooth",326,476,54,24,juce::Justification::left);
+        g.drawText("Fine",386,499,45,14,juce::Justification::left);g.drawText("Broad",563,499,54,14,juce::Justification::right);
+        if(showTone)for(int i=0;i<3;++i) {
+            const int x=20+i*204;g.setColour(panel);g.fillRoundedRectangle(float(x),542,192,76,7);
+            g.setColour(violet);g.drawText(i==0?"LOW":i==1?"MID":"HIGH",x+8,542,160,16,juce::Justification::left);
+        }}
+    if(page==2){g.setColour(muted);g.drawText("IN",20,316,30,20,juce::Justification::left);g.drawText("OUT",238,316,34,20,juce::Justification::left);g.drawText("Drag the white playhead to seek. Drag a region to loop.",20,370,600,20,juce::Justification::left);}
 }
 void RefMatchAudioProcessorEditor::resized()
 {
     a.setBounds(34,76,42,38);b.setBounds(384,76,42,38);switchButton.setBounds(280,94,80,38);
-    gain.setBounds(75,120,180,28);autoGain.setBounds(160,97,96,21);back.setBounds(384,123,40,26);play.setBounds(430,123,80,26);forward.setBounds(516,123,40,26);meters.setBounds(562,123,50,26);
+    gain.setBounds(75,120,180,28);back.setBounds(384,123,48,26);play.setBounds(439,123,112,26);forward.setBounds(558,123,48,26);
     eqTab.setBounds(20,190,292,28);loopTab.setBounds(328,190,292,28);
     recordMix.setBounds(20,234,180,32);recordRef.setBounds(212,234,180,32);match.setBounds(404,234,102,32);reset.setBounds(516,234,104,32);
     mixProfile.setBounds(20,267,180,24);refProfile.setBounds(212,267,180,24);eqOn.setBounds(520,269,100,24);
-    amount.setBounds(76,475,540,28);
+    amount.setBounds(76,475,232,28);smooth.setBounds(380,475,238,28);
+    toneButton.setBounds(20,517,112,25);toneReset.setBounds(504,517,116,25);
+    for(int i=0;i<3;++i){tone[2*i].setBounds(26+i*204,560,180,24);tone[2*i+1].setBounds(26+i*204,588,180,24);}
     timeline.setBounds(20,230,600,72);inTime.setBounds(52,314,92,28);setIn.setBounds(152,314,70,28);outTime.setBounds(278,314,92,28);setOut.setBounds(378,314,70,28);loopOn.setBounds(480,314,120,28);position.setBounds(20,345,600,22);
     status.setBounds(20,getHeight()-30,600,24);
 }

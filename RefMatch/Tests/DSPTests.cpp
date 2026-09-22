@@ -1,12 +1,22 @@
 #include <JuceHeader.h>
 #include "MatchEQ.h"
 #include "LearnCapture.h"
+#include "ReferenceAnalysisState.h"
 #include <iostream>
 #include <cstdlib>
 void require(bool value,const char* message){if(!value){std::cerr<<"FAIL: "<<message<<'\n';std::exit(1);}}
 int main()
 {
     constexpr double sr=48000;
+    ReferenceAnalysisState independentReference;
+    independentReference.learning.start(LearnCapture::reference);
+    juce::AudioBuffer<float> external(2,512);
+    for(int block=0;block<100;++block) {
+        for(int i=0;i<512;++i)for(int ch=0;ch<2;++ch)external.setSample(ch,i,float(.2*std::sin(2*juce::MathConstants<double>::pi*1000*(block*512+i)/sr)));
+        independentReference.acceptAudio(external);
+    }
+    require(independentReference.learning.get(LearnCapture::reference).ready,"REF profile records with no host processBlock calls");
+    require(independentReference.peak.load()>.15f && independentReference.present.load(),"REF meter updates independently of host playback");
     LearnCapture capture;
     juce::AudioBuffer<float> mix(2,512),ref(2,512);
     auto feed=[&](bool colour,int blocks) {
@@ -61,5 +71,16 @@ int main()
     for(int i=0;i<512;++i)mix.setSample(0,i,float(.1*std::sin(i*.2)));
     juce::AudioBuffer<float> original;original.makeCopyOf(mix);eq.process(mix);
     for(int i=0;i<512;++i)require(std::abs(mix.getSample(0,i)-original.getSample(0,i))<.0001,"zero amount is transparent");
+    eq.setAmount(0);eq.setTone({{3,1000,0,2000,0,8000}});eq.refresh();
+    const auto manual=eq.getCurveDb();float manualPeak=0;for(auto db:manual)manualPeak=std::max(manualPeak,db);
+    require(manualPeak>2.9,"manual Tone EQ remains active at zero Match Amount");
+    inputEnergy=0;outputEnergy=0;
+    for(int block=0;block<150;++block) {
+        for(int i=0;i<512;++i)for(int ch=0;ch<2;++ch)mix.setSample(ch,i,float(.1*std::sin(2*juce::MathConstants<double>::pi*1000*(block*512+i)/sr)));
+        if(block>50)for(int i=0;i<512;++i)inputEnergy+=mix.getSample(0,i)*mix.getSample(0,i);
+        eq.process(mix);
+        if(block>50)for(int i=0;i<512;++i)outputEnergy+=mix.getSample(0,i)*mix.getSample(0,i);
+    }
+    require(std::abs(10*std::log10(outputEnergy/inputEnergy)-3)<.15,"manual Tone EQ applies 3 dB to actual audio after matching");
     std::cout<<"PASS: profile capture, silence, stereo power, frozen profiles, persistence on prepare, audible EQ and zero amount\n";
 }

@@ -9,6 +9,7 @@
 #include "SystemMediaController.h"
 #include "TransportSwitch.h"
 #include "ReferenceLoop.h"
+#include "ReferenceAnalysis.h"
 
 class RefMatchAudioProcessor : public juce::AudioProcessor, private juce::Timer
 {
@@ -56,14 +57,15 @@ public:
 
     void selectSource(bool reference);
     void recordProfile(LearnCapture::Side side);
-    LearnCapture::Side recording() const { return learning.active(); }
-    LearnCapture::Profile profile(LearnCapture::Side side) const { return learning.get(side); }
+    LearnCapture::Side recording() const { return referenceAnalysis.learning.active()==LearnCapture::reference?LearnCapture::reference:learning.active(); }
+    LearnCapture::Profile profile(LearnCapture::Side side) const { return side==LearnCapture::reference?referenceAnalysis.learning.get(side):learning.get(side); }
     juce::String getLearningStatus() const { return learningStatus; }
     bool hasMatch() const { return apvts.state.getProperty("hasLearnedMatch",false); }
     ReferenceLoop& getLoop() { return referenceLoop; }
     void autoGainMatch();
     void learnMatch();
     void clearMatch();
+    std::vector<float> getToneCurveDb() const { return matchEQ.getCurveDb(0.f); }
     std::vector<float> getFullMatchCurveDb() const { return matchEQ.getCurveDb(1.f); }
     std::vector<float> getMatchCurveDb() const;
 
@@ -75,7 +77,7 @@ public:
     float getReferencePeakDb() const;
     float getSourceGainDb() const;
     bool hasReferenceFailure() const { return referenceFailure.load(); }
-    bool hasReferenceAudio() const { return referenceAudioPresent.load(); }
+    bool hasReferenceAudio() const { return referenceAnalysis.present.load(); }
     double getSampleRateForDisplay() const { return currentSampleRate; }
 
     juce::AudioProcessorValueTreeState apvts;
@@ -85,30 +87,27 @@ private:
 
     void timerCallback() override;
     void pauseMediaAndRestore();
+    void recalculateMatch();
     SystemMediaController mediaController;
     ReferenceLoop referenceLoop {mediaController};
     TransportSwitch transportSwitch;
     juce::String transportError;
     double fadeDeadline = 0;
     bool mediaStarted = false;
-    SystemAudioCapture referenceCapture;
-    juce::AudioBuffer<float> referenceBuffer;
+    ReferenceAnalysis referenceAnalysis;
     juce::AudioBuffer<float> dryMixBuffer;
     juce::AudioBuffer<float> eqBuffer;
     juce::SmoothedValue<float> eqWet;
     SpectrumAnalyser sourceAnalyser;
-    SpectrumAnalyser referenceAnalyser;
     MatchEQ matchEQ;
     LearnCapture learning;
     juce::String learningStatus {"Record MIX and REF, then press MATCH"};
-    float lastAmount=-1,lastLimit=-1;
+    float lastAmount=-1,lastLimit=-1,lastSmooth=-1;
+    std::array<float,6> lastTone{{-999,-999,-999,-999,-999,-999}};
     double lastEQRate=0;
 
     std::atomic<float> sourcePeakSmooth { 0.0f };
-    std::atomic<float> referencePeakSmooth { 0.0f };
     std::atomic<float> sourceRmsSmooth { 0.0f };
-    std::atomic<float> referenceRmsSmooth { 0.0f };
-    std::atomic<bool> referenceAudioPresent { false };
 
     std::atomic<double> currentSampleRate {48000.0};
     ReferenceFade referenceFade;

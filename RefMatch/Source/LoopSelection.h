@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 namespace LoopSelection {
+inline int dragMode(float cursorDistance,float leftDistance,float rightDistance) {return cursorDistance<7?3:std::min(leftDistance,rightDistance)<8?(leftDistance<=rightDistance?1:2):0;}
 struct Range { double start=0,end=0; };
 inline Range drag(double anchor,double end,double duration) {
     if(!std::isfinite(duration)||duration<.5)return {};

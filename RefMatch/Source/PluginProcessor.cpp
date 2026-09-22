@@ -26,10 +26,11 @@ void RefMatchAudioProcessor::selectSource(bool reference)
 
 void RefMatchAudioProcessor::recordProfile(LearnCapture::Side side)
 {
-    if (learning.active()==side) { learning.stop(); learningStatus="Profile captured"; return; }
+    if (recording()==side) { learning.stop(); referenceAnalysis.learning.stop(); learningStatus="Profile captured"; return; }
     if (side==LearnCapture::reference && !isReferenceCaptureRunning()) startReferenceCapture();
     selectSource(side==LearnCapture::reference);
-    learning.start(side);
+    learning.stop();referenceAnalysis.learning.stop();
+    if(side==LearnCapture::reference)referenceAnalysis.learning.start(side);else learning.start(side);
     learningStatus=side==LearnCapture::mix ? "Recording MIX - play your mix" : "Recording REF - play your reference";
 }
 
@@ -80,6 +81,18 @@ void RefMatchAudioProcessor::pauseMediaAndRestore()
 void RefMatchAudioProcessor::timerCallback()
 {
     referenceLoop.setAuditioning(isReferenceSelected());
+    const float smooth=apvts.getRawParameterValue("smooth")->load()/100.f;
+    if(smooth!=lastSmooth && recording()==LearnCapture::none) {
+        lastSmooth=smooth;matchEQ.setSmoothing(smooth);
+        if(hasMatch() && recording()==LearnCapture::none)recalculateMatch();
+    }
+    bool toneChanged=false;std::array<float,6> tone{};
+    for(int i=0;i<3;++i) {
+        const juce::String id="tone"+juce::String(i);
+        tone[2*i]=apvts.getRawParameterValue(id+"gain")->load();tone[2*i+1]=apvts.getRawParameterValue(id+"freq")->load();
+    }
+    if(tone!=lastTone){lastTone=tone;toneChanged=true;matchEQ.setTone(tone);}
+    if(toneChanged)matchEQ.refresh();
     const float amount=apvts.getRawParameterValue("matchamount")->load()/100.f;
     const float limit=apvts.getRawParameterValue("maxcorrection")->load();
     if(amount!=lastAmount || limit!=lastLimit || lastEQRate!=currentSampleRate) {
@@ -136,6 +149,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout RefMatchAudioProcessor::crea
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "maxcorrection", "Max Correction", juce::NormalisableRange<float>(0.5f, 12.0f, 0.1f), 4.0f));
     params.push_back(std::make_unique<juce::AudioParameterBool>("bypass", "Bypass", false));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("smooth","Smooth",juce::NormalisableRange<float>(0,100,.1f),35));
+    for(int i=0;i<3;++i) {
+        const juce::String id="tone"+juce::String(i);
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(id+"gain","Tone "+juce::String(i+1)+" Gain",juce::NormalisableRange<float>(-6,6,.1f),0));
+        juce::NormalisableRange<float> range(30,16000,1);range.setSkewForCentre(1000);
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(id+"freq","Tone "+juce::String(i+1)+" Frequency",range,i==0?120.f:i==1?1000.f:8000.f));
+    }
     return { params.begin(), params.end() };
 }
 
@@ -143,27 +163,22 @@ void RefMatchAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
 {
     currentSampleRate = sampleRate;
     const int channels = juce::jmax(1, getTotalNumOutputChannels());
-    referenceBuffer.setSize(channels, samplesPerBlock);
     dryMixBuffer.setSize(channels, samplesPerBlock);
     eqBuffer.setSize(channels,samplesPerBlock);
     eqWet.reset(sampleRate,.020);
     eqWet.setCurrentAndTargetValue(apvts.getRawParameterValue("matchenabled")->load());
     sourceAnalyser.reset();
-    referenceAnalyser.reset();
     matchEQ.prepare(sampleRate, samplesPerBlock, channels);
     learning.prepare();
     sourcePeakSmooth.store(0.0f);
-    referencePeakSmooth.store(0.0f);
     sourceRmsSmooth.store(0.0f);
-    referenceRmsSmooth.store(0.0f);
-    referenceAudioPresent.store(false);
     effectiveReference.store(false);
     referenceFade.prepare(sampleRate, isReferenceSelected());
 }
 
 void RefMatchAudioProcessor::releaseResources()
 {
-    stopReferenceCapture();
+    // Keep external reference analysis alive while the host suspends processing.
 }
 
 bool RefMatchAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -196,29 +211,7 @@ void RefMatchAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     sourcePeakSmooth.store(juce::jmax(sourcePeak, sourcePeakSmooth.load() * 0.93f));
     sourceRmsSmooth.store(0.985f * sourceRmsSmooth.load() + 0.015f * sourceRms);
 
-    referenceBuffer.setSize(numChannels, numSamples, false, false, true);
-    const bool gotReference = referenceCapture.pullAudio(referenceBuffer, currentSampleRate);
-    referenceAudioPresent.store(gotReference);
-    learning.push(dryMixBuffer,referenceBuffer,gotReference,currentSampleRate);
-
-    if (gotReference)
-    {
-        referenceAnalyser.pushBlock(referenceBuffer);
-        float refPeak = 0.0f, refRms = 0.0f;
-        for (int ch = 0; ch < numChannels; ++ch)
-        {
-            refPeak = juce::jmax(refPeak, referenceBuffer.getMagnitude(ch, 0, numSamples));
-            refRms += referenceBuffer.getRMSLevel(ch, 0, numSamples);
-        }
-        refRms /= (float)numChannels;
-        referencePeakSmooth.store(juce::jmax(refPeak, referencePeakSmooth.load() * 0.93f));
-        referenceRmsSmooth.store(0.985f * referenceRmsSmooth.load() + 0.015f * refRms);
-    }
-    else
-    {
-        referencePeakSmooth.store(referencePeakSmooth.load() * 0.90f);
-        referenceRmsSmooth.store(referenceRmsSmooth.load() * 0.98f);
-    }
+    learning.push(dryMixBuffer,dryMixBuffer,false,currentSampleRate);
 
     const bool bypass = apvts.getRawParameterValue("bypass")->load() > 0.5f;
     if (!bypass)
@@ -256,11 +249,11 @@ void RefMatchAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 
 }
 
-void RefMatchAudioProcessor::startReferenceCapture() { referenceCapture.start(); }
-void RefMatchAudioProcessor::stopReferenceCapture() { referenceCapture.stop(); }
-bool RefMatchAudioProcessor::isReferenceCaptureRunning() const { return referenceCapture.isRunning(); }
-bool RefMatchAudioProcessor::isReferenceCaptureStarting() const { return referenceCapture.isStarting(); }
-juce::String RefMatchAudioProcessor::getReferenceCaptureStatus() const { return referenceCapture.getStatusText(); }
+void RefMatchAudioProcessor::startReferenceCapture() { referenceAnalysis.capture.start(); }
+void RefMatchAudioProcessor::stopReferenceCapture() { referenceAnalysis.capture.stop(); }
+bool RefMatchAudioProcessor::isReferenceCaptureRunning() const { return referenceAnalysis.capture.isRunning(); }
+bool RefMatchAudioProcessor::isReferenceCaptureStarting() const { return referenceAnalysis.capture.isStarting(); }
+juce::String RefMatchAudioProcessor::getReferenceCaptureStatus() const { return referenceAnalysis.capture.getStatusText(); }
 
 void RefMatchAudioProcessor::setReferenceSelected(bool shouldSelectReference)
 {
@@ -289,7 +282,7 @@ bool RefMatchAudioProcessor::isReferenceSelected() const
 void RefMatchAudioProcessor::autoGainMatch()
 {
     const float src = sourceRmsSmooth.load();
-    const float ref = referenceRmsSmooth.load();
+    const float ref = referenceAnalysis.rms.load();
     if (src <= 1.0e-6f || ref <= 1.0e-6f) return;
 
     const float db = juce::jlimit(-24.0f, 24.0f, juce::Decibels::gainToDecibels(ref / src, -24.0f));
@@ -303,9 +296,19 @@ void RefMatchAudioProcessor::autoGainMatch()
 
 void RefMatchAudioProcessor::learnMatch()
 {
-    learning.stop();
-    const auto a=learning.get(LearnCapture::mix),b=learning.get(LearnCapture::reference);
+    learning.stop();referenceAnalysis.learning.stop();
+    const auto a=profile(LearnCapture::mix),b=profile(LearnCapture::reference);
     if(!a.ready || !b.ready) { learningStatus="Record both MIX and REF first (at least 0.5 s of audio).";return; }
+    recalculateMatch();
+    apvts.state.setProperty("hasLearnedMatch",true,nullptr);
+    apvts.getParameter("matchenabled")->setValueNotifyingHost(1.f);
+    learningStatus="Match applied to MIX";
+}
+
+void RefMatchAudioProcessor::recalculateMatch()
+{
+    const auto a=profile(LearnCapture::mix),b=profile(LearnCapture::reference);
+    if(!a.ready || !b.ready)return;
     auto remap=[this](const LearnCapture::Profile& p) {
         std::array<float,SpectrumAnalyser::bins> result{};
         for(int i=0;i<SpectrumAnalyser::bins;++i) {
@@ -314,12 +317,10 @@ void RefMatchAudioProcessor::learnMatch()
             result[i]=p.db[j]+float(std::clamp(source-j,0.,1.))*(p.db[k]-p.db[j]);
         }return result;
     };
+    matchEQ.setSmoothing(apvts.getRawParameterValue("smooth")->load()/100.f);
     matchEQ.setAmount(apvts.getRawParameterValue("matchamount")->load()/100.f);
     matchEQ.setMaxCorrectionDb(apvts.getRawParameterValue("maxcorrection")->load());
     matchEQ.learn(remap(a),remap(b),currentSampleRate);
-    apvts.state.setProperty("hasLearnedMatch",true,nullptr);
-    apvts.getParameter("matchenabled")->setValueNotifyingHost(1.f);
-    learningStatus="Match applied to MIX";
 }
 
 void RefMatchAudioProcessor::clearMatch()
@@ -331,21 +332,23 @@ void RefMatchAudioProcessor::clearMatch()
 }
 
 std::vector<float> RefMatchAudioProcessor::getMatchCurveDb() const { return matchEQ.getCurveDb(); }
-std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getSourceSpectrum() const { return sourceAnalyser.getAveragedMagnitudes(); }
-std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getReferenceSpectrum() const { return referenceAnalyser.getAveragedMagnitudes(); }
+std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getSourceSpectrum() const { auto values=sourceAnalyser.getAveragedMagnitudes();if(juce::Time::getMillisecondCounterHiRes()-lastAudioCallbackMs.load()>200)values.fill(-100.f);return values; }
+std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getReferenceSpectrum() const { auto values=referenceAnalysis.analyser.getAveragedMagnitudes();if(!referenceAnalysis.present.load())values.fill(-100.f);return values; }
 
 std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getDifferenceSpectrum() const
 {
     auto a = sourceAnalyser.getAveragedMagnitudes();
-    auto b = referenceAnalyser.getAveragedMagnitudes();
+    auto b = referenceAnalysis.analyser.getAveragedMagnitudes();
     std::array<float, SpectrumAnalyser::bins> d {};
-    for (size_t i = 0; i < d.size(); ++i)
-        d[i] = juce::jlimit(-18.0f, 18.0f, b[i] - a[i]);
+    for (size_t i = 0; i < d.size(); ++i) {
+        const int index=std::clamp(int(i*currentSampleRate.load()/ReferenceAnalysis::sampleRate),0,SpectrumAnalyser::bins-1);
+        d[i] = juce::jlimit(-18.0f, 18.0f, b[index] - a[i]);
+    }
     return d;
 }
 
-float RefMatchAudioProcessor::getSourcePeakDb() const { return juce::Decibels::gainToDecibels(sourcePeakSmooth.load(), -100.0f); }
-float RefMatchAudioProcessor::getReferencePeakDb() const { return juce::Decibels::gainToDecibels(referencePeakSmooth.load(), -100.0f); }
+float RefMatchAudioProcessor::getSourcePeakDb() const { return juce::Decibels::gainToDecibels(juce::Time::getMillisecondCounterHiRes()-lastAudioCallbackMs.load()<200?sourcePeakSmooth.load():0.f, -100.0f); }
+float RefMatchAudioProcessor::getReferencePeakDb() const { return juce::Decibels::gainToDecibels(referenceAnalysis.peak.load(), -100.0f); }
 float RefMatchAudioProcessor::getSourceGainDb() const { return apvts.getRawParameterValue("sourcegain")->load(); }
 
 void RefMatchAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
@@ -355,7 +358,7 @@ void RefMatchAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
     for(auto gain:matchEQ.getGains())gains.add(gain);
     state.setProperty("eqGains",juce::JSON::toString(juce::var(gains)),nullptr);
     for(auto side:{LearnCapture::mix,LearnCapture::reference}) {
-        const auto p=learning.get(side);const juce::String prefix=side==LearnCapture::mix?"mixProfile":"refProfile";
+        const auto p=profile(side);const juce::String prefix=side==LearnCapture::mix?"mixProfile":"refProfile";
         juce::Array<juce::var> spectrum;for(auto db:p.db)spectrum.add(db);
         state.setProperty(prefix,juce::JSON::toString(juce::var(spectrum)),nullptr);
         state.setProperty(prefix+"Rate",p.sampleRate,nullptr);
@@ -379,7 +382,7 @@ void RefMatchAudioProcessor::setStateInformation(const void* data, int size)
             const double v=double((*array)[i]);gains[i]=std::isfinite(v)?std::clamp(v,-12.,12.):0;
         }
         matchEQ.restoreGains(gains);
-        learning.stop();
+        learning.stop();referenceAnalysis.learning.stop();
         for(auto side:{LearnCapture::mix,LearnCapture::reference}) {
             LearnCapture::Profile p;const juce::String prefix=side==LearnCapture::mix?"mixProfile":"refProfile";
             const auto value=juce::JSON::parse(state.getProperty(prefix).toString());
@@ -388,7 +391,7 @@ void RefMatchAudioProcessor::setStateInformation(const void* data, int size)
                 p.sampleRate=std::clamp(double(state.getProperty(prefix+"Rate",48000.)),8000.,384000.);
                 p.seconds=std::max(0.,double(state.getProperty(prefix+"Seconds",0.)));p.ready=p.seconds>=.5;
             }
-            learning.restore(side,p);
+            if(side==LearnCapture::reference)referenceAnalysis.learning.restore(side,p);else learning.restore(side,p);
         }
     }
 }

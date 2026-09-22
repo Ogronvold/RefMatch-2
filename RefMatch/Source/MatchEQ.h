@@ -10,6 +10,7 @@ public:
     void reset(); // Publish flat target; audio filter states remain audio-owned.
     void setAmount(float value) { amount.store(value); }
     void setMaxCorrectionDb(float value) { limit.store(value); }
+    void setTone(const std::array<float,6>& value) {const juce::SpinLock::ScopedLockType guard(lock);tone=value;}
     void setSmoothing(float value) { smoothing.store(value); }
     void learn(const std::array<float,SpectrumAnalyser::bins>&,
                const std::array<float,SpectrumAnalyser::bins>&,double sampleRate);
@@ -19,9 +20,11 @@ public:
     void restoreGains(const EQDesign::Gains&);
     void refresh(); // Message-thread coefficient design, never called in process.
 private:
+    static constexpr int stages=EQDesign::bands+3;
+    std::array<float,6> tone{{0,120,0,1000,0,8000}};
     struct Stage { double z1=0,z2=0; };
-    std::array<std::array<Stage,EQDesign::bands>,2> states{};
-    std::array<EQDesign::Coeff,EQDesign::bands> current{},target{},published{};
+    std::array<std::array<Stage,stages>,2> states{};
+    std::array<EQDesign::Coeff,stages> current{},target{},published{};
     EQDesign::Gains learned{};
     std::atomic<float> amount{.6f},limit{4},smoothing{.35f};
     std::atomic<double> rate{48000};

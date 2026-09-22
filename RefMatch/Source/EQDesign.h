@@ -9,11 +9,11 @@ constexpr int bands = 20;
 using Gains = std::array<double, bands>;
 struct Coeff { double b0=1,b1=0,b2=0,a1=0,a2=0; };
 inline double centre(int i) { return 30.0 * std::pow(16000.0/30.0, double(i)/(bands-1)); }
-inline Coeff peak(double sr, double hz, double db)
+inline Coeff peak(double sr, double hz, double db, double q=2.0)
 {
     hz=std::min(hz,sr*.45);
     const double a=std::pow(10.0,db/40.0), w=2*3.141592653589793*hz/sr;
-    const double alpha=std::sin(w)/(2*2.0), c=std::cos(w), d=1+alpha/a;
+    const double alpha=std::sin(w)/(2*q), c=std::cos(w), d=1+alpha/a;
     return {(1+alpha*a)/d,-2*c/d,(1-alpha*a)/d,-2*c/d,(1-alpha/a)/d};
 }
 inline double response(const Coeff& c,double hz,double sr)
@@ -29,12 +29,13 @@ inline Gains fit(const Gains& mix,const Gains& ref,double sr,double smoothing)
     double mean=0;
     for(int i=0;i<bands;++i) { target[i]=ref[i]-mix[i]; mean+=target[i]/bands; }
     for(auto& x:target)x-=mean;
-    const int radius=std::clamp(int(smoothing*3),0,3);
     auto raw=target;
-    for(int i=0;i<bands;++i) {
+    const double sigma=std::clamp(smoothing,0.,1.)*3.;
+    if(sigma>.01)for(int i=0;i<bands;++i) {
         double sum=0,weight=0;
-        for(int j=std::max(0,i-radius);j<=std::min(bands-1,i+radius);++j) {
-            const double w=radius+1-std::abs(i-j);sum+=raw[j]*w;weight+=w;
+        for(int j=0;j<bands;++j) {
+            const double distance=double(i-j),w=std::exp(-.5*distance*distance/(sigma*sigma));
+            sum+=raw[j]*w;weight+=w;
         }
         target[i]=sum/weight;
     }

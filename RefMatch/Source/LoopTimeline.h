@@ -8,20 +8,20 @@ public:
     std::function<void(double)> onSeek;
     void update(double time,double length,double start,double end,bool active,bool valid,const juce::String& identity) {
         if(dragging && identity!=track)dragging=false;
-        track=identity;cursor=time;duration=length;enabled=active;available=valid && length>=.5;
+        track=identity;if(!dragging || mode!=3)cursor=time;duration=length;enabled=active;available=valid && length>=.5;
         if(!dragging){const auto range=LoopSelection::drag(start,end,length);in=range.start;out=range.end;}
         repaint();
     }
     void paint(juce::Graphics& g) override {
         const auto r=getLocalBounds().toFloat().reduced(8,18);
-        g.setColour(juce::Colour(0xff101217));g.fillRoundedRectangle(getLocalBounds().toFloat(),8);
-        g.setColour(juce::Colour(0xff242830));g.fillRoundedRectangle(r,4);
+        g.setColour(juce::Colour(0xff111824));g.fillRoundedRectangle(getLocalBounds().toFloat(),8);
+        g.setColour(juce::Colour(0xff273245));g.fillRoundedRectangle(r,4);
         if(duration>0) {
             const auto x=[&](double value){return r.getX()+float(std::clamp(value/duration,0.,1.))*r.getWidth();};
             const float left=x(in),right=x(out);
-            g.setColour(juce::Colour(0xff76e5d1).withAlpha(enabled?.35f:.14f));
+            g.setColour(juce::Colour(0xffb16af3).withAlpha(enabled?.35f:.14f));
             g.fillRect(juce::Rectangle<float>(left,r.getY(),std::max(0.f,right-left),r.getHeight()));
-            g.setColour(juce::Colour(0xff76e5d1));
+            g.setColour(juce::Colour(0xffb16af3));
             g.fillRect(left-2,r.getY(),4.f,r.getHeight());g.fillRect(right-2,r.getY(),4.f,r.getHeight());
             g.setColour(juce::Colour(0xffeef1f7));g.fillRect(x(cursor)-1,r.getY()-3,2.f,r.getHeight()+6);
             g.setColour(juce::Colour(0xff808897));g.setFont(juce::Font(juce::FontOptions(10)));
@@ -39,12 +39,14 @@ public:
         const float width=float(getWidth()-16);
         const float leftDistance=std::abs(e.position.x-(8+float(in/duration)*width));
         const float rightDistance=std::abs(e.position.x-(8+float(out/duration)*width));
-        mode=std::min(leftDistance,rightDistance)<8?(leftDistance<=rightDistance?1:2):0;
+        const float cursorDistance=std::abs(e.position.x-(8+float(cursor/duration)*width));
+        mode=LoopSelection::dragMode(cursorDistance,leftDistance,rightDistance);
     }
     void mouseDrag(const juce::MouseEvent& e) override {
         if(!dragging || !available)return;
         const double point=at(e.position.x);
-        if(mode==1)in=std::clamp(point,0.,std::max(0.,out-.5));
+        if(mode==3)cursor=point;
+        else if(mode==1)in=std::clamp(point,0.,std::max(0.,out-.5));
         else if(mode==2)out=std::clamp(point,std::min(duration,in+.5),duration);
         else {const auto range=LoopSelection::drag(anchor,point,duration);in=range.start;out=range.end;}
         repaint();
@@ -53,7 +55,8 @@ public:
         if(!dragging)return;
         dragging=false;
         if(!available){in=originalIn;out=originalOut;repaint();return;}
-        if(mode==0 && std::abs(e.position.x-downX)<4) {
+        if(mode==3) {if(onSeek)onSeek(at(e.position.x));}
+        else if(mode==0 && std::abs(e.position.x-downX)<4) {
             in=originalIn;out=originalOut;if(onSeek)onSeek(at(e.position.x));
         } else if(onRange)onRange(in,out);
         repaint();

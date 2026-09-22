@@ -27,6 +27,9 @@ int main()
     feedback.request(false,800);feedback.report(1,5700);
     check(feedback.state(5801)==1 && !feedback.pending(5801),"unconfirmed command expires to actual reported state");
     check(feedback.state(9000)==-1,"old playback metadata expires");
+    check(LoopSelection::dragMode(2,2,20)==3,"white playhead drag wins when coincident with a loop edge");
+    check(LoopSelection::dragMode(20,2,5)==1,"left handle remains draggable away from playhead");
+    check(LoopSelection::dragMode(20,5,2)==2,"right handle remains draggable for short loops");
     const auto reverse=LoopSelection::drag(51,47,197);
     check(reverse.start==47 && reverse.end==51,"reverse drag selects same loop range");
     const auto edge=LoopSelection::drag(197,197,197);
@@ -100,6 +103,11 @@ int main()
     const auto flat=EQDesign::fit(source,reference,48000,.3);
     for(auto gain:flat)check(std::abs(gain)<1.e-8,"level-only difference produces flat EQ");
     for(int i=0;i<EQDesign::bands;++i)reference[i]=source[i]+(i<EQDesign::bands/2?-3:3);
+    EQDesign::Gains jagged{};for(int i=0;i<EQDesign::bands;++i)jagged[i]=(i%2?6:-6);
+    const auto fine=EQDesign::fit(source,jagged,48000,0),broad=EQDesign::fit(source,jagged,48000,1);
+    double fineVariation=0,broadVariation=0;
+    for(int i=1;i<EQDesign::bands;++i){fineVariation+=std::abs(fine[i]-fine[i-1]);broadVariation+=std::abs(broad[i]-broad[i-1]);}
+    check(broadVariation<fineVariation,"Smooth reduces narrow alternating corrections");
     const auto fitted=EQDesign::fit(source,reference,48000,0);
     const auto limited=EQDesign::scaled(fitted,1,4,48000);
     for(int i=0;i<180;++i){const double hz=20*std::pow(1000.,i/179.);double db=0;

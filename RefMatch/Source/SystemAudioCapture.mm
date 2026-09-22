@@ -112,6 +112,8 @@ struct SystemAudioCapture::Impl
             readFraction = 0.0;
         }
         const double ratio = sourceRate / rate;
+        // Worker pulls complete blocks only: no inserted silence between partial packets.
+        if(available<int(std::ceil(dest.getNumSamples()*ratio))+2)return false;
         bool received = false;
         for (int i = 0; i < dest.getNumSamples(); ++i) {
             const int advance = static_cast<int>(readFraction + ratio);
