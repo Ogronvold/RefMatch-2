@@ -1,0 +1,40 @@
+name: Prepare signed RefMatch installer
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    environment: release-signing
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build universal plugins and tests
+        run: |
+          cmake -S RefMatch -B build -DCMAKE_BUILD_TYPE=Release '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' -DBUILD_TESTING=ON -DREFMATCH_ADHOC_SIGN=OFF
+          cmake --build build --config Release --parallel 3
+          ctest --test-dir build -C Release --output-on-failure
+      - name: Developer ID sign, validate, package and notarize
+        shell: bash
+        env:
+          CERTIFICATES_P12_BASE64: ${{ secrets.CERTIFICATES_P12_BASE64 }}
+          CERTIFICATES_PASSWORD: ${{ secrets.CERTIFICATES_PASSWORD }}
+          DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+          DEVELOPER_ID_INSTALLER: ${{ secrets.DEVELOPER_ID_INSTALLER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: bash scripts/release-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RefMatch-signed-installer
+          path: release-output/*.pkg
+          if-no-files-found: error
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RefMatch-release-validation
+          path: release-output/*.log
+          if-no-files-found: ignore
