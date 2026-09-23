@@ -1,4 +1,5 @@
 #include "MatchEQ.h"
+
 void MatchEQ::prepare(double sr,int,int)
 {
     rate.store(sr);states={};current={};target={};rampRemaining=0;
@@ -30,14 +31,35 @@ void MatchEQ::learn(const std::array<float,SpectrumAnalyser::bins>& mix,
     }
     restoreGains(EQDesign::fit(a,b,sr,smoothing.load()));
 }
+
+double MatchEQ::matchWeight(double hz) const
+{
+    const double low=std::max(20.0,double(matchLow.load()));
+    const double high=std::max(low*1.01,double(matchHigh.load()));
+    if(hz<=low/1.5 || hz>=high*1.5) return 0.0;
+    auto smoothStep=[](double x){x=std::clamp(x,0.0,1.0);return x*x*(3.0-2.0*x);};
+    double w=1.0;
+    if(hz<low) w*=smoothStep(std::log(hz/(low/1.5))/std::log(1.5));
+    if(hz>high) w*=smoothStep(std::log((high*1.5)/hz)/std::log(1.5));
+    return std::clamp(w,0.0,1.0);
+}
+
+EQDesign::Coeff MatchEQ::toneCoeff(int band,double sr,float gain,float freq) const
+{
+    if(band==0 && lowShelf.load()) return EQDesign::lowShelf(sr,freq,gain);
+    if(band==2 && highShelf.load()) return EQDesign::highShelf(sr,freq,gain);
+    return EQDesign::peak(sr,freq,gain,band==1?midQ.load():.75f);
+}
+
 void MatchEQ::refresh()
 {
     const auto sr=rate.load();
-    const auto gains=EQDesign::scaled(getGains(),amount.load(),1000.,sr);
+    auto gains=EQDesign::scaled(getGains(),amount.load(),limit.load(),sr);
+    for(int b=0;b<EQDesign::bands;++b)gains[b]*=matchWeight(EQDesign::centre(b));
     std::array<EQDesign::Coeff,stages> coeff{};
     for(int b=0;b<EQDesign::bands;++b)coeff[b]=EQDesign::peak(sr,EQDesign::centre(b),gains[b]);
     const juce::SpinLock::ScopedLockType guard(lock);
-    for(int i=0;i<3;++i)coeff[EQDesign::bands+i]=EQDesign::peak(sr,tone[2*i+1],toneEnabled.load()?tone[2*i]:0.f,.75);
+    for(int i=0;i<3;++i)coeff[EQDesign::bands+i]=toneCoeff(i,sr,toneEnabled.load()?tone[2*i]:0.f,tone[2*i+1]);
     published=coeff;dirty=true;
 }
 void MatchEQ::process(juce::AudioBuffer<float>& buffer)
@@ -66,14 +88,15 @@ void MatchEQ::process(juce::AudioBuffer<float>& buffer)
 }
 std::vector<float> MatchEQ::getCurveDb(float displayAmount) const
 {
-    const auto sr=rate.load();const auto gains=EQDesign::scaled(getGains(),displayAmount<0?amount.load():displayAmount,1000.,sr);
+    const auto sr=rate.load();auto gains=EQDesign::scaled(getGains(),displayAmount<0?amount.load():displayAmount,limit.load(),sr);
+    for(int b=0;b<EQDesign::bands;++b)gains[b]*=matchWeight(EQDesign::centre(b));
     std::array<float,6> manual;{const juce::SpinLock::ScopedLockType guard(lock);manual=tone;}
     if(!toneEnabled.load())for(int i=0;i<3;++i)manual[2*i]=0;
     std::vector<float> result(180);
     for(int i=0;i<180;++i) {
         const double hz=20*std::pow(std::min(20000.,sr*.45)/20.,i/179.);
         double db=0;for(int b=0;b<EQDesign::bands;++b)db+=EQDesign::response(EQDesign::peak(sr,EQDesign::centre(b),gains[b]),hz,sr);
-        for(int band=0;band<3;++band)db+=EQDesign::response(EQDesign::peak(sr,manual[2*band+1],manual[2*band],.75),hz,sr);
+        for(int band=0;band<3;++band)db+=EQDesign::response(toneCoeff(band,sr,manual[2*band],manual[2*band+1]),hz,sr);
         result[i]=float(db);
     }return result;
 }

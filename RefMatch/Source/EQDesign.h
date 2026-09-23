@@ -16,6 +16,25 @@ inline Coeff peak(double sr, double hz, double db, double q=2.0)
     const double alpha=std::sin(w)/(2*q), c=std::cos(w), d=1+alpha/a;
     return {(1+alpha*a)/d,-2*c/d,(1-alpha*a)/d,-2*c/d,(1-alpha/a)/d};
 }
+
+inline Coeff lowShelf(double sr, double hz, double db)
+{
+    hz=std::min(hz,sr*.45);
+    const double A=std::pow(10.0,db/40.0), w=2*3.141592653589793*hz/sr;
+    const double c=std::cos(w), si=std::sin(w), alpha=si/std::sqrt(2.0), beta=2.0*std::sqrt(A)*alpha;
+    const double b0=A*((A+1)-(A-1)*c+beta), b1=2*A*((A-1)-(A+1)*c), b2=A*((A+1)-(A-1)*c-beta);
+    const double a0=(A+1)+(A-1)*c+beta, a1=-2*((A-1)+(A+1)*c), a2=(A+1)+(A-1)*c-beta;
+    return {b0/a0,b1/a0,b2/a0,a1/a0,a2/a0};
+}
+inline Coeff highShelf(double sr, double hz, double db)
+{
+    hz=std::min(hz,sr*.45);
+    const double A=std::pow(10.0,db/40.0), w=2*3.141592653589793*hz/sr;
+    const double c=std::cos(w), si=std::sin(w), alpha=si/std::sqrt(2.0), beta=2.0*std::sqrt(A)*alpha;
+    const double b0=A*((A+1)+(A-1)*c+beta), b1=-2*A*((A-1)+(A+1)*c), b2=A*((A+1)+(A-1)*c-beta);
+    const double a0=(A+1)-(A-1)*c+beta, a1=2*((A-1)-(A+1)*c), a2=(A+1)-(A-1)*c-beta;
+    return {b0/a0,b1/a0,b2/a0,a1/a0,a2/a0};
+}
 inline double response(const Coeff& c,double hz,double sr)
 {
     const auto z=std::polar(1.0,-2*3.141592653589793*hz/sr);
@@ -55,14 +74,18 @@ inline Gains fit(const Gains& mix,const Gains& ref,double sr,double smoothing)
 }
 inline Gains scaled(Gains gains,double amount,double limit,double sr)
 {
-    for(auto& g:gains)g*=std::clamp(amount,0.,1.);
+    // First constrain the learned 100% curve to Max Correction, then use Amount
+    // as a true wet scaling of that complete correction. 100% is the normal full
+    // match; values above 100% deliberately exaggerate the learned correction.
     double maximum=0;
     for(int i=0;i<160;++i) {
         const double hz=20*std::pow(std::min(20000.,sr*.45)/20.,i/159.);
         double db=0;for(int b=0;b<bands;++b)db+=response(peak(sr,centre(b),gains[b]),hz,sr);
         maximum=std::max(maximum,std::abs(db));
     }
-    if(maximum>limit)for(auto& g:gains)g*=limit/maximum;
+    if(maximum>limit && maximum>0.0)for(auto& g:gains)g*=limit/maximum;
+    const double wet=std::clamp(amount,0.,2.);
+    for(auto& g:gains)g*=wet;
     return gains;
 }
 }

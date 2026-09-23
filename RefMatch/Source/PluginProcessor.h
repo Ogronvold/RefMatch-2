@@ -68,10 +68,13 @@ public:
     std::vector<float> getToneCurveDb() const { return matchEQ.getCurveDb(0.f); }
     std::vector<float> getFullMatchCurveDb() const { return matchEQ.getCurveDb(1.f); }
     std::vector<float> getMatchCurveDb() const;
+    std::vector<float> getMatchCurveDbAtAmount(float amount) const;
 
     std::array<float, SpectrumAnalyser::bins> getSourceSpectrum() const;
     std::array<float, SpectrumAnalyser::bins> getReferenceSpectrum() const;
     std::array<float, SpectrumAnalyser::bins> getDifferenceSpectrum() const;
+    std::array<float, SpectrumAnalyser::bins> getBeforeEffectSpectrum() const;
+    std::array<float, SpectrumAnalyser::bins> getAfterEffectSpectrum() const;
 
     float getSourcePeakDb() const;
     float getReferencePeakDb() const;
@@ -99,11 +102,13 @@ private:
     juce::AudioBuffer<float> eqBuffer;
     juce::SmoothedValue<float> eqWet;
     SpectrumAnalyser sourceAnalyser;
+    SpectrumAnalyser beforeEffectAnalyser;
+    SpectrumAnalyser afterEffectAnalyser;
     MatchEQ matchEQ;
     LearnCapture learning;
-    juce::String learningStatus {"Record MIX and REF, then press MATCH"};
-    bool lastToneEnabled=true;
-    float lastAmount=-1,lastLimit=-1,lastSmooth=-1;
+    juce::String learningStatus {"Record MIX and REF, then press MATCH  ·  Recommended: at least 8 s"};
+    bool lastToneEnabled=true,lastLowShelf=true,lastHighShelf=true;
+    float lastAmount=-1,lastLimit=-1,lastSmooth=-1,lastMidQ=-1,lastMatchLow=-1,lastMatchHigh=-1;
     std::array<float,6> lastTone{{-999,-999,-999,-999,-999,-999}};
     double lastEQRate=0;
 

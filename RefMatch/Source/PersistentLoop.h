@@ -13,6 +13,7 @@ public:
     }
     void enable(bool value){enabled=value;restart();state=value?State::waiting:State::off;}
     void restart(){first=true;verifying=false;retryAt=0;}
+    void clear(){enabled=false;in=0;out=30;restart();state=State::off;}
     bool isEnabled() const{return enabled;}
     double getIn() const{return in;}
     double getOut() const{return out;}

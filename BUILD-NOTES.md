@@ -1,4 +1,4 @@
-# RefMatch 0.5.5 validation
+# RefMatch 0.5.6 validation
 
 ## Architecture change
 
@@ -54,7 +54,7 @@ Private MediaRemote APIs remain optional and fallible. No helpers, subprocesses,
 external audio routes are introduced. Existing live-analyser audio-thread locks remain for
 MIX; this version does not claim hard realtime certification or sample-accurate Spotify seek.
 
-## 0.5.5 focused changes and acceptance
+## 0.5.6 focused changes and acceptance
 
 Tone enable is appended as a parameter. Only the three manual stages ramp to identity;
 learned EQ and Tone values remain unchanged. DSP tests added for bypassed actual audio,
@@ -67,7 +67,7 @@ New C++ tests and Logic audition have not run locally (no Apple developer tools)
 Verify Smooth around 95.2-95.5%, all Tone controls, Amount, Tone on/off, range choices,
 clipped-curve label and save/reopen. Axis labels must remain unchanged during EQ edits.
 
-## 0.5.5 focused changes
+## 0.5.6 focused changes
 
 PersistentLoop is a pure state machine shared by production and runtime tests.
 Tests cover metadata outage/recovery, refused and unconfirmed seek with backoff,
@@ -84,3 +84,15 @@ C++ suites have NOT run locally: no Apple developer toolchain. In Logic, record 
 repeatedly inside a short loop; stop/start Logic and Spotify; alternate A/B; hide the
 editor; scrub; change songs; temporarily lose metadata. LOOP must stay selected and
 recover without being re-enabled. For a shorter track, adjust bounds while WAITING.
+
+## 0.5.6 additions
+- Main-screen persistent LOOP toggle reuses the most recently defined range.
+- BEFORE/AFTER on A keeps Mix Gain active while bypassing/enabling Match EQ + Tone EQ.
+- Match EQ low/high draggable range handles with soft transition outside the selected range.
+- Applied EQ graph now overlays a smoothed live before/after spectrum.
+- Tone EQ frequency ranges are focused: LOW 30–300 Hz, MID 200 Hz–6 kHz, HIGH 3–20 kHz.
+- LOW/HIGH can switch between Shelf and Bell; MID adds adjustable Q.
+- Capture guidance recommends at least 8 seconds of representative audio.
+- Max Correction is now respected in MatchEQ curve scaling/processing.
+
+Build note: full macOS AU/VST3 compilation must run on macOS because the project uses Objective-C++/ScreenCaptureKit. The Linux validation environment cannot provide the Objective-C++ compiler/runtime required for the plugin target.

@@ -12,6 +12,7 @@ public:
         message="Loop points set";return true;
     }
     void enable(bool value){loop.enable(value);message=value?"LOOP WAITING - checking player":"Loop off";}
+    void clear(){loop.clear();message="Loop cleared";}
     bool seek(double seconds) {
         if(!position.valid || !std::isfinite(seconds))return false;
         seconds=loop.manualTarget(seconds,position.duration);

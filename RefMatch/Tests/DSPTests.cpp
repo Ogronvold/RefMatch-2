@@ -57,7 +57,13 @@ int main()
         if(block>=100)for(int i=0;i<512;++i)outputEnergy+=mix.getSample(0,i)*mix.getSample(0,i);
     }
     const double measured=10*std::log10(outputEnergy/inputEnergy);
-    require(std::abs(measured-3)<.15,"100% Amount applies full 3 dB correction despite legacy saved limit");
+    require(std::abs(measured-.5)<.15,"Max Correction limits the audible match response");
+    // Amount must scale the already-limited 100% curve, not hit the limiter early
+    // and plateau. With a 0.5 dB max, 50% Amount should be about 0.25 dB.
+    eq.setAmount(.5f);eq.refresh();
+    float limitedHalfPeak=0;for(auto db:eq.getCurveDb())limitedHalfPeak=std::max(limitedHalfPeak,std::abs(db));
+    require(limitedHalfPeak>.18f && limitedHalfPeak<.32f,"Amount remains proportional after Max Correction limiting");
+    eq.setMaxCorrectionDb(12.f);eq.refresh();
     const auto fullScaleCurve=eq.getCurveDb(1.f);
     eq.setAmount(.5f);const auto halfCurve=eq.getCurveDb();
     require(eq.getCurveDb(1.f)==fullScaleCurve,"graph full-scale response does not change with Amount");
@@ -66,12 +72,17 @@ int main()
     float halfMax=0,threeQuarterMax=0,fullMax=0;
     for(size_t i=0;i<fullCurve.size();++i){halfMax=std::max(halfMax,halfCurve[i]);threeQuarterMax=std::max(threeQuarterMax,threeQuarterCurve[i]);fullMax=std::max(fullMax,fullCurve[i]);}
     require(halfMax<threeQuarterMax && threeQuarterMax<fullMax,"applied graph continues moving from 50 through 75 to 100 percent");
+    eq.setAmount(1.5f);const auto oneFiftyCurve=eq.getCurveDb();
+    eq.setAmount(2.f);const auto twoHundredCurve=eq.getCurveDb();
+    float oneFiftyMax=0,twoHundredMax=0;
+    for(size_t i=0;i<twoHundredCurve.size();++i){oneFiftyMax=std::max(oneFiftyMax,std::abs(oneFiftyCurve[i]));twoHundredMax=std::max(twoHundredMax,std::abs(twoHundredCurve[i]));}
+    require(oneFiftyMax>fullMax && twoHundredMax>oneFiftyMax,"Amount can deliberately over-match from 100 through 200 percent");
     eq.setAmount(0);eq.refresh();
     for(int block=0;block<100;++block){mix.clear();eq.process(mix);}
     for(int i=0;i<512;++i)mix.setSample(0,i,float(.1*std::sin(i*.2)));
     juce::AudioBuffer<float> original;original.makeCopyOf(mix);eq.process(mix);
     for(int i=0;i<512;++i)require(std::abs(mix.getSample(0,i)-original.getSample(0,i))<.0001,"zero amount is transparent");
-    eq.setAmount(0);eq.setTone({{3,1000,0,2000,0,8000}});eq.refresh();
+    eq.setAmount(0);eq.setTone({{0,120,3,1000,0,8000}});eq.refresh();
     const auto manual=eq.getCurveDb();float manualPeak=0;for(auto db:manual)manualPeak=std::max(manualPeak,db);
     require(manualPeak>2.9,"manual Tone EQ remains active at zero Match Amount");
     inputEnergy=0;outputEnergy=0;
@@ -81,7 +92,7 @@ int main()
         eq.process(mix);
         if(block>50)for(int i=0;i<512;++i)outputEnergy+=mix.getSample(0,i)*mix.getSample(0,i);
     }
-    require(std::abs(10*std::log10(outputEnergy/inputEnergy)-3)<.15,"manual Tone EQ applies 3 dB to actual audio after matching");
+    require(std::abs(10*std::log10(outputEnergy/inputEnergy)-3)<.15,"manual MID Tone EQ applies 3 dB to actual audio after matching");
     const auto enabledToneCurve=eq.getCurveDb();
     eq.setToneEnabled(false);eq.refresh();
     for(auto db:eq.getCurveDb())require(std::abs(db)<.0001,"Tone OFF removes manual response at zero Match Amount");

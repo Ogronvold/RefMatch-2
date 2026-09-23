@@ -94,6 +94,14 @@ void RefMatchAudioProcessor::timerCallback()
     if(tone!=lastTone){lastTone=tone;toneChanged=true;matchEQ.setTone(tone);}
     const bool toneEnabled=apvts.getRawParameterValue("toneenabled")->load()>.5f;
     if(toneEnabled!=lastToneEnabled){lastToneEnabled=toneEnabled;toneChanged=true;matchEQ.setToneEnabled(toneEnabled);}
+    const bool lowShelf=apvts.getRawParameterValue("tone0shelf")->load()>.5f;
+    const bool highShelf=apvts.getRawParameterValue("tone2shelf")->load()>.5f;
+    const float midQ=apvts.getRawParameterValue("tone1q")->load();
+    if(lowShelf!=lastLowShelf || highShelf!=lastHighShelf){lastLowShelf=lowShelf;lastHighShelf=highShelf;toneChanged=true;matchEQ.setToneTypes(lowShelf,highShelf);}
+    if(midQ!=lastMidQ){lastMidQ=midQ;toneChanged=true;matchEQ.setMidQ(midQ);}
+    const float matchLow=apvts.getRawParameterValue("matchlow")->load();
+    const float matchHigh=apvts.getRawParameterValue("matchhigh")->load();
+    if(matchLow!=lastMatchLow || matchHigh!=lastMatchHigh){lastMatchLow=matchLow;lastMatchHigh=matchHigh;toneChanged=true;matchEQ.setMatchRange(matchLow,matchHigh);}
     if(toneChanged)matchEQ.refresh();
     const float amount=apvts.getRawParameterValue("matchamount")->load()/100.f;
     const float limit=apvts.getRawParameterValue("maxcorrection")->load();
@@ -147,18 +155,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout RefMatchAudioProcessor::crea
         "sourcegain", "Mix Gain", juce::NormalisableRange<float>(-24.0f, 24.0f, 0.1f), 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterBool>("matchenabled", "Match EQ", false));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "matchamount", "Match Amount", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 60.0f));
+        "matchamount", "Match Amount", juce::NormalisableRange<float>(0.0f, 200.0f, 0.1f), 60.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "maxcorrection", "Max Correction", juce::NormalisableRange<float>(0.5f, 12.0f, 0.1f), 4.0f));
     params.push_back(std::make_unique<juce::AudioParameterBool>("bypass", "Bypass", false));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("smooth","Smooth",juce::NormalisableRange<float>(0,100,.1f),35));
+    const std::array<std::pair<float,float>,3> toneRanges{{{30.f,300.f},{200.f,6000.f},{3000.f,20000.f}}};
+    const std::array<float,3> toneDefaults{{120.f,1000.f,8000.f}};
     for(int i=0;i<3;++i) {
         const juce::String id="tone"+juce::String(i);
         params.push_back(std::make_unique<juce::AudioParameterFloat>(id+"gain","Tone "+juce::String(i+1)+" Gain",juce::NormalisableRange<float>(-6,6,.1f),0));
-        juce::NormalisableRange<float> range(30,16000,1);range.setSkewForCentre(1000);
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(id+"freq","Tone "+juce::String(i+1)+" Frequency",range,i==0?120.f:i==1?1000.f:8000.f));
+        juce::NormalisableRange<float> range(toneRanges[i].first,toneRanges[i].second,1);range.setSkewForCentre(toneDefaults[i]);
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(id+"freq","Tone "+juce::String(i+1)+" Frequency",range,toneDefaults[i]));
     }
+    params.push_back(std::make_unique<juce::AudioParameterBool>("tone0shelf","Low Shelf",true));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("tone1q","Mid Q",juce::NormalisableRange<float>(0.3f,4.0f,0.01f,0.45f),0.75f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("tone2shelf","High Shelf",true));
     params.push_back(std::make_unique<juce::AudioParameterBool>("toneenabled","Tone EQ Enabled",true));
+    juce::NormalisableRange<float> lowRange(20.f,1000.f,0.1f);lowRange.setSkewForCentre(120.f);
+    juce::NormalisableRange<float> highRange(1000.f,20000.f,1.f);highRange.setSkewForCentre(12000.f);
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("matchlow","Match Low",lowRange,20.f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("matchhigh","Match High",highRange,20000.f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("processingafter","Before After",true));
     return { params.begin(), params.end() };
 }
 
@@ -171,6 +189,8 @@ void RefMatchAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
     eqWet.reset(sampleRate,.020);
     eqWet.setCurrentAndTargetValue(apvts.getRawParameterValue("matchenabled")->load());
     sourceAnalyser.reset();
+    beforeEffectAnalyser.reset();
+    afterEffectAnalyser.reset();
     matchEQ.prepare(sampleRate, samplesPerBlock, channels);
     learning.prepare();
     sourcePeakSmooth.store(0.0f);
@@ -223,10 +243,11 @@ void RefMatchAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         buffer.applyGain(sourceGain);
 
     }
+    beforeEffectAnalyser.pushBlock(buffer);
     // Keep filter state warm and ramp the EQ bypass, avoiding a hard gain jump.
     eqBuffer.makeCopyOf(buffer,true);
     matchEQ.process(eqBuffer);
-    eqWet.setTargetValue(!bypass && apvts.getRawParameterValue("matchenabled")->load()>.5f ? 1.f:0.f);
+    eqWet.setTargetValue(!bypass && apvts.getRawParameterValue("processingafter")->load()>.5f && apvts.getRawParameterValue("matchenabled")->load()>.5f ? 1.f:0.f);
     for(int i=0;i<numSamples;++i) {
         const float wet=eqWet.getNextValue();
         for(int ch=0;ch<numChannels;++ch) {
@@ -234,6 +255,7 @@ void RefMatchAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             buffer.setSample(ch,i,dry+wet*(eqBuffer.getSample(ch,i)-dry));
         }
     }
+    afterEffectAnalyser.pushBlock(buffer);
 
     // Stream-AB style switching: B is heard directly from the external app.
     // RefMatch only fades/mutes the DAW signal. Captured system audio is used
@@ -301,7 +323,7 @@ void RefMatchAudioProcessor::learnMatch()
 {
     learning.stop();referenceAnalysis.learning.stop();
     const auto a=profile(LearnCapture::mix),b=profile(LearnCapture::reference);
-    if(!a.ready || !b.ready) { learningStatus="Record both MIX and REF first (at least 0.5 s of audio).";return; }
+    if(!a.ready || !b.ready) { learningStatus="Record both MIX and REF first. Recommended: at least 8 s of representative audio.";return; }
     recalculateMatch();
     apvts.state.setProperty("hasLearnedMatch",true,nullptr);
     apvts.getParameter("matchenabled")->setValueNotifyingHost(1.f);
@@ -323,6 +345,9 @@ void RefMatchAudioProcessor::recalculateMatch()
     matchEQ.setSmoothing(apvts.getRawParameterValue("smooth")->load()/100.f);
     matchEQ.setAmount(apvts.getRawParameterValue("matchamount")->load()/100.f);
     matchEQ.setMaxCorrectionDb(apvts.getRawParameterValue("maxcorrection")->load());
+    matchEQ.setMatchRange(apvts.getRawParameterValue("matchlow")->load(),apvts.getRawParameterValue("matchhigh")->load());
+    matchEQ.setToneTypes(apvts.getRawParameterValue("tone0shelf")->load()>.5f,apvts.getRawParameterValue("tone2shelf")->load()>.5f);
+    matchEQ.setMidQ(apvts.getRawParameterValue("tone1q")->load());
     matchEQ.learn(remap(a),remap(b),currentSampleRate);
 }
 
@@ -335,8 +360,11 @@ void RefMatchAudioProcessor::clearMatch()
 }
 
 std::vector<float> RefMatchAudioProcessor::getMatchCurveDb() const { return matchEQ.getCurveDb(); }
+std::vector<float> RefMatchAudioProcessor::getMatchCurveDbAtAmount(float amount) const { return matchEQ.getCurveDb(amount); }
 std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getSourceSpectrum() const { auto values=sourceAnalyser.getAveragedMagnitudes();if(juce::Time::getMillisecondCounterHiRes()-lastAudioCallbackMs.load()>200)values.fill(-100.f);return values; }
 std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getReferenceSpectrum() const { auto values=referenceAnalysis.analyser.getAveragedMagnitudes();if(!referenceAnalysis.present.load())values.fill(-100.f);return values; }
+std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getBeforeEffectSpectrum() const { auto values=beforeEffectAnalyser.getAveragedMagnitudes();if(juce::Time::getMillisecondCounterHiRes()-lastAudioCallbackMs.load()>200)values.fill(-100.f);return values; }
+std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getAfterEffectSpectrum() const { auto values=afterEffectAnalyser.getAveragedMagnitudes();if(juce::Time::getMillisecondCounterHiRes()-lastAudioCallbackMs.load()>200)values.fill(-100.f);return values; }
 
 std::array<float, SpectrumAnalyser::bins> RefMatchAudioProcessor::getDifferenceSpectrum() const
 {
